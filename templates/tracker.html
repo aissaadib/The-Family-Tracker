@@ -1,0 +1,78 @@
+{% extends "layout.html" %}
+
+{% block head %}
+  <style>
+      .log { max-height: 200px; overflow-y: auto; background: #f0f0f0; padding: 10px; font-family: monospace; margin-top: 10px; }
+  </style>
+{% endblock %}
+
+{% block main %}
+    <div class="card">
+        <div class="card-body">
+            <h1>📡 Tracker: {{ name }}</h1>
+            <p>Leave this page open on your phone. It will send your GPS position regularly to the server.</p>
+            <div id="status" class="alert alert-secondary">Status: waiting to start…</div>
+            <button id="startBtn" class="btn btn-primary">Start tracking</button>
+            <button id="stopBtn" class="btn btn-danger" disabled>Stop tracking</button>
+            <div id="log" class="log"></div>
+        </div>
+    </div>
+
+    <script>
+        const nameValue = "{{ name }}";
+        const statusEl = document.getElementById("status");
+        const logEl = document.getElementById("log");
+        const startBtn = document.getElementById("startBtn");
+        const stopBtn = document.getElementById("stopBtn");
+        let watchId = null;
+
+        function log(msg) {
+            logEl.innerText = new Date().toLocaleTimeString() + " - " + msg + "\n" + logEl.innerText;
+        }
+
+        startBtn.onclick = () => {
+            if (!navigator.geolocation) {
+                statusEl.innerText = "Geolocation is not supported by your browser";
+                return;
+            }
+            statusEl.className = "alert alert-success";
+            statusEl.innerText = "Tracking started...";
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+
+            watchId = navigator.geolocation.watchPosition(success, error, {
+                enableHighAccuracy: true
+            });
+        };
+
+        stopBtn.onclick = () => {
+            if (watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+                watchId = null;
+            }
+            statusEl.className = "alert alert-secondary";
+            statusEl.innerText = "Tracking stopped.";
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+        };
+
+        function success(position) {
+            const lat = position.coords.latitude;
+            const lon = position.coords.longitude;
+            statusEl.innerText = `Sending: ${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+            
+            fetch('/api/update_location', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: nameValue, lat: lat, lon: lon })
+            }).then(res => res.json())
+              .then(data => log(`Sent OK: ${lat.toFixed(5)}, ${lon.toFixed(5)}`))
+              .catch(err => log("Error sending: " + err));
+        }
+
+        function error() {
+            statusEl.className = "alert alert-danger";
+            statusEl.innerText = "Unable to retrieve your location";
+        }
+    </script>
+{% endblock %}
