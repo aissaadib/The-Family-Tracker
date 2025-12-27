@@ -12,7 +12,13 @@
 {% block main %}
     <div class="row">
         <div class="col-12">
-            <h1>Family Map</h1>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h1>Family Map</h1>
+                <div class="d-flex gap-2">
+                    <a href="/" class="btn btn-outline-primary">Home</a>
+                    <a href="/logout" class="btn btn-outline-danger">Logout</a>
+                </div>
+            </div>
             <div id="legend">
                 <strong>Legend:</strong>
                 {% for p in family %}
