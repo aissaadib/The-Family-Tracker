@@ -94,10 +94,11 @@ def login():
 def register():
     if request.method == "POST":
         username = request.form.get("username")
+        location = request.form.get("location")
         password = request.form.get("password")
         confirmation = request.form.get("confirmation")
 
-        if not username or not password or not confirmation:
+        if not username or not location or not password or not confirmation:
             flash("All fields are required")
             return render_template("register.html")
         
@@ -109,7 +110,7 @@ def register():
 
         conn = get_db_connection()
         try:
-            conn.execute("INSERT INTO users (username, hash) VALUES (?, ?)", (username, hash_pw))
+            conn.execute("INSERT INTO users (username, hash, location) VALUES (?, ?, ?)", (username, hash_pw, location))
             conn.commit()
         except sqlite3.IntegrityError:
             conn.close()
@@ -138,6 +139,18 @@ def toggle_visibility():
     conn = get_db_connection()
     # Update 'vis' column in the database for the current user
     conn.execute("UPDATE users SET vis = ? WHERE id = ?", (int(new_vis), session["user_id"]))
+    
+    # --- P_MAP SYNCHRONIZATION ---
+    if new_vis:
+        # Add to p_map if becoming public
+        user_data = conn.execute("SELECT username, location FROM users WHERE id = ?", (session["user_id"],)).fetchone()
+        conn.execute("INSERT OR REPLACE INTO p_map (user_id, username, location) VALUES (?, ?, ?)", 
+                     (session["user_id"], user_data["username"], user_data["location"]))
+    else:
+        # Remove from p_map if becoming private
+        conn.execute("DELETE FROM p_map WHERE user_id = ?", (session["user_id"],))
+    # --- END P_MAP SYNC ---
+
     conn.commit()
     conn.close()
     
@@ -154,6 +167,7 @@ def api_locations():
     
     # Logic: 
     # 1. Show a person's location if they are Public (vis=1)
+    #    We now pull these from the p_map table as requested.
     # 2. ALSO show everything if the requester is logged in (Private view)
     
     is_logged_in = session.get("user_id") is not None
@@ -162,13 +176,12 @@ def api_locations():
         # Logged in users see everything (Private Map view)
         rows = conn.execute("SELECT name, role, lat, lon, last_update FROM people").fetchall()
     else:
-        # Non-logged in users (or Public Map) only see people whose associated user is Public
-        # We join people with users on name=username to check visibility status
+        # Non-logged in users (or Public Map) only see people from p_map
+        # We join people with p_map on name=username
         rows = conn.execute("""
             SELECT p.name, p.role, p.lat, p.lon, p.last_update 
             FROM people p
-            JOIN users u ON p.name = u.username
-            WHERE u.vis = 1
+            JOIN p_map pm ON p.name = pm.username
         """).fetchall()
         
     conn.close()
