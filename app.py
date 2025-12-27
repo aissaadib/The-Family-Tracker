@@ -171,11 +171,10 @@ def api_locations():
     # 2. ALSO show everything if the requester is logged in (Private view)
     
     is_logged_in = session.get("user_id") is not None
+    is_public_map_request = request.referrer and "public-map" in request.referrer
     
-    if is_logged_in:
-        # Logged in users see everything (Private Map view)
-        # We also include users who might not be in 'people' yet but are in 'users'
-        # Let's join to get the latest info
+    if is_logged_in and not is_public_map_request:
+        # Logged in users see everything ONLY on Private Map view
         rows = conn.execute("""
             SELECT p.name, p.role, p.lat, p.lon, p.last_update 
             FROM people p
