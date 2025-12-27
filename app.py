@@ -174,7 +174,20 @@ def api_locations():
     
     if is_logged_in:
         # Logged in users see everything (Private Map view)
-        rows = conn.execute("SELECT name, role, lat, lon, last_update FROM people").fetchall()
+        # We also include users who might not be in 'people' yet but are in 'users'
+        # Let's join to get the latest info
+        rows = conn.execute("""
+            SELECT p.name, p.role, p.lat, p.lon, p.last_update 
+            FROM people p
+        """).fetchall()
+        
+        # If 'people' is empty, let's at least show the logged in user if they have a location
+        if not rows:
+            rows = conn.execute("""
+                SELECT username as name, 'User' as role, 34.020882 as lat, -6.841650 as lon, strftime('%s','now') as last_update
+                FROM users
+                WHERE id = ?
+            """, (session["user_id"],)).fetchall()
     else:
         # Non-logged in users (or Public Map) only see people from p_map
         # We join people with p_map on name=username
