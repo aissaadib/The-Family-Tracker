@@ -1,34 +1,34 @@
 {% extends "layout.html" %}
 
 {% block main %}
-<div class="d-flex justify-content-end mb-3">
-    <a href="/logout" class="btn btn-outline-danger shadow-sm">Logout</a>
-</div>
-<div class="row mt-4">
+<div class="row mt-5">
     <div class="col-md-4 mb-4">
-        <div class="card h-100 shadow-sm hover-elevate">
+        <div class="card h-100 border-0 p-3">
             <div class="card-body text-center">
-                <h3 class="card-title">Friend List</h3>
-                <p class="card-text text-muted">Manage your connections and see who's online.</p>
-                <button class="btn btn-primary w-100" disabled>View Friends</button>
+                <div class="display-5 mb-3">👥</div>
+                <h3 class="card-title h4 fw-bold">Friend List</h3>
+                <p class="card-text text-muted mb-4">Stay connected with your inner circle.</p>
+                <button class="btn btn-light w-100 text-muted" disabled>Coming Soon</button>
             </div>
         </div>
     </div>
     <div class="col-md-4 mb-4">
-        <div class="card h-100 shadow-sm hover-elevate border-primary">
+        <div class="card h-100 border-0 p-3">
             <div class="card-body text-center">
-                <h3 class="card-title">Private Map</h3>
-                <p class="card-text text-muted">Secure view of your family locations.</p>
-                <a href="/private-map" class="btn btn-primary w-100">Access Map</a>
+                <div class="display-5 mb-3">🔒</div>
+                <h3 class="card-title h4 fw-bold">Private Map</h3>
+                <p class="card-text text-muted mb-4">Secure, real-time family tracking.</p>
+                <a href="/private-map" class="btn btn-primary w-100 py-2">Open Private Map</a>
             </div>
         </div>
     </div>
     <div class="col-md-4 mb-4">
-        <div class="card h-100 shadow-sm hover-elevate">
+        <div class="card h-100 border-0 p-3">
             <div class="card-body text-center">
-                <h3 class="card-title">Public Map</h3>
-                <p class="card-text text-muted">Shared view for authorized public access.</p>
-                <a href="/public-map" class="btn btn-primary w-100">View Public</a>
+                <div class="display-5 mb-3">🌐</div>
+                <h3 class="card-title h4 fw-bold">Public Map</h3>
+                <p class="card-text text-muted mb-4">View shared authorized locations.</p>
+                <a href="/public-map" class="btn btn-outline-primary w-100 py-2">View Public Map</a>
             </div>
         </div>
     </div>
