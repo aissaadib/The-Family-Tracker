@@ -78,6 +78,7 @@ def login():
 
         session["user_id"] = user["id"]
         session["username"] = user["username"]
+        session["vis"] = bool(user["vis"]) # Store visibility status in session
         session["logged"] = True
         
         return redirect("/")
@@ -121,6 +122,25 @@ def register():
 def logout():
     session.clear()
     return redirect("/")
+
+# --- VISIBILITY TOGGLE FEATURE ---
+@app.route("/toggle-visibility", methods=["POST"])
+@login_required
+def toggle_visibility():
+    """Toggles user account from Private to Public and back."""
+    new_vis = not session.get("vis", False)
+    
+    conn = get_db_connection()
+    # Update 'vis' column in the database for the current user
+    conn.execute("UPDATE users SET vis = ? WHERE id = ?", (int(new_vis), session["user_id"]))
+    conn.commit()
+    conn.close()
+    
+    # Update the session to reflect the new state
+    session["vis"] = new_vis
+    flash(f"Account visibility set to {'Public' if new_vis else 'Private'}")
+    return redirect(request.referrer or "/")
+# --- END VISIBILITY TOGGLE ---
 
 @app.route("/api/locations")
 @login_required

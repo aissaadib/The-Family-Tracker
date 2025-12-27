@@ -84,6 +84,15 @@
                                 Hi, {{ session["username"] }}
                             </span>
                         </li>
+                        <!-- VISIBILITY TOGGLE BUTTON -->
+                        <li class="nav-item me-2">
+                            <form action="/toggle-visibility" method="post" class="d-inline">
+                                <button type="submit" class="btn {% if session.get('vis') %}btn-success{% else %}btn-secondary{% endif %} btn-sm px-3">
+                                    {% if session.get('vis') %}Public Account{% else %}Private Account{% endif %}
+                                </button>
+                            </form>
+                        </li>
+                        <!-- END TOGGLE BUTTON -->
                         <li class="nav-item"><a class="btn btn-outline-danger btn-sm px-3" href="/logout">Logout</a></li>
                     {% else %}
                         <li class="nav-item px-2"><a class="nav-link" href="/login">Login</a></li>
