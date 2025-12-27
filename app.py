@@ -48,10 +48,15 @@ def private_map():
     return render_template("map.html", family=family, title="Private Map")
 
 @app.route("/public-map")
-@login_required
 def public_map():
     conn = get_db_connection()
-    rows = conn.execute("SELECT name, role FROM people").fetchall()
+    # For the legend, only show public people
+    rows = conn.execute("""
+        SELECT p.name, p.role 
+        FROM people p
+        JOIN users u ON p.name = u.username
+        WHERE u.vis = 1
+    """).fetchall()
     conn.close()
     family = [{"name": row["name"], "role": row["role"]} for row in rows]
     return render_template("map.html", family=family, title="Public Map")
@@ -143,10 +148,29 @@ def toggle_visibility():
 # --- END VISIBILITY TOGGLE ---
 
 @app.route("/api/locations")
-@login_required
 def api_locations():
+    """Returns locations based on visibility and auth."""
     conn = get_db_connection()
-    rows = conn.execute("SELECT name, role, lat, lon, last_update FROM people").fetchall()
+    
+    # Logic: 
+    # 1. Show a person's location if they are Public (vis=1)
+    # 2. ALSO show everything if the requester is logged in (Private view)
+    
+    is_logged_in = session.get("user_id") is not None
+    
+    if is_logged_in:
+        # Logged in users see everything (Private Map view)
+        rows = conn.execute("SELECT name, role, lat, lon, last_update FROM people").fetchall()
+    else:
+        # Non-logged in users (or Public Map) only see people whose associated user is Public
+        # We join people with users on name=username to check visibility status
+        rows = conn.execute("""
+            SELECT p.name, p.role, p.lat, p.lon, p.last_update 
+            FROM people p
+            JOIN users u ON p.name = u.username
+            WHERE u.vis = 1
+        """).fetchall()
+        
     conn.close()
 
     family = []
