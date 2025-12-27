@@ -1,0 +1,33 @@
+{% extends "layout.html" %}
+
+{% block main %}
+<div class="row mt-4">
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 shadow-sm hover-elevate">
+            <div class="card-body text-center">
+                <h3 class="card-title">Friend List</h3>
+                <p class="card-text text-muted">Manage your connections and see who's online.</p>
+                <button class="btn btn-primary w-100" disabled>View Friends</button>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 shadow-sm hover-elevate border-primary">
+            <div class="card-body text-center">
+                <h3 class="card-title">Private Map</h3>
+                <p class="card-text text-muted">Secure view of your family locations.</p>
+                <a href="/private-map" class="btn btn-primary w-100">Access Map</a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 shadow-sm hover-elevate">
+            <div class="card-body text-center">
+                <h3 class="card-title">Public Map</h3>
+                <p class="card-text text-muted">Shared view for authorized public access.</p>
+                <a href="/public-map" class="btn btn-primary w-100">View Public</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

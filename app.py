@@ -35,16 +35,26 @@ def login_required(f):
 
 @app.route("/")
 @login_required
-def index():
+def home():
+    return render_template("home.html")
+
+@app.route("/private-map")
+@login_required
+def private_map():
     conn = get_db_connection()
     rows = conn.execute("SELECT name, role FROM people").fetchall()
     conn.close()
-    
-    family = []
-    for row in rows:
-        family.append({"name": row["name"], "role": row["role"]})
-        
-    return render_template("index.html", family=family)
+    family = [{"name": row["name"], "role": row["role"]} for row in rows]
+    return render_template("map.html", family=family, title="Private Map")
+
+@app.route("/public-map")
+@login_required
+def public_map():
+    conn = get_db_connection()
+    rows = conn.execute("SELECT name, role FROM people").fetchall()
+    conn.close()
+    family = [{"name": row["name"], "role": row["role"]} for row in rows]
+    return render_template("map.html", family=family, title="Public Map")
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
