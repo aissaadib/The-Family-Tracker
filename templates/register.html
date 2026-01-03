@@ -5,15 +5,13 @@
             <div class="card shadow-sm">
                 <div class="card-body">
                     <h2 class="card-title text-center mb-4">Register</h2>
-                    <form action="/register" method="post">
+                    <form action="/register" method="post" id="registerForm">
                         <div class="mb-3">
                             <label for="username" class="form-label">Username</label>
                             <input autocomplete="off" autofocus class="form-control" name="username" id="username" placeholder="Username" type="text" required>
                         </div>
-                        <div class="mb-3">
-                            <label for="location" class="form-label">Address</label>
-                            <input class="form-control" name="location" id="location" placeholder="e.g. 123 Main St" type="text" required>
-                        </div>
+                        <input type="hidden" name="lat" id="lat">
+                        <input type="hidden" name="lon" id="lon">
                         <div class="mb-3">
                             <label for="password" class="form-label">Password</label>
                             <input class="form-control" name="password" id="password" placeholder="Password" type="password" required>
@@ -23,9 +21,55 @@
                             <input class="form-control" name="confirmation" id="confirmation" placeholder="Confirm Password" type="password" required>
                         </div>
                         <div class="d-grid">
-                            <button class="btn btn-primary" type="submit">Register</button>
+                            <button class="btn btn-primary" type="submit" id="submitBtn">
+                                <span id="btnText">Register</span>
+                                <span id="btnLoading" class="spinner-border spinner-border-sm d-none" role="status" aria-hidden="true"></span>
+                            </button>
                         </div>
                     </form>
+
+                    <script>
+                        const form = document.getElementById('registerForm');
+                        const submitBtn = document.getElementById('submitBtn');
+                        const btnText = document.getElementById('btnText');
+                        const btnLoading = document.getElementById('btnLoading');
+
+                        form.addEventListener('submit', function(e) {
+                            e.preventDefault();
+                            
+                            // Disable button and show loading
+                            submitBtn.disabled = true;
+                            btnText.textContent = 'Locating...';
+                            btnLoading.classList.remove('d-none');
+
+                            if (!navigator.geolocation) {
+                                alert("Geolocation is not supported by your browser");
+                                submitBtn.disabled = false;
+                                btnText.textContent = 'Register';
+                                btnLoading.classList.add('d-none');
+                                return;
+                            }
+
+                            navigator.geolocation.getCurrentPosition(
+                                (position) => {
+                                    document.getElementById('lat').value = position.coords.latitude;
+                                    document.getElementById('lon').value = position.coords.longitude;
+                                    form.submit();
+                                },
+                                (error) => {
+                                    let msg = "Location access is required for registration.";
+                                    if (error.code === error.PERMISSION_DENIED) {
+                                        msg = "Please enable location access in your browser settings to register.";
+                                    }
+                                    alert(msg);
+                                    submitBtn.disabled = false;
+                                    btnText.textContent = 'Register';
+                                    btnLoading.classList.add('d-none');
+                                },
+                                { timeout: 10000, enableHighAccuracy: true }
+                            );
+                        });
+                    </script>
                     <div class="mt-3 text-center">
                         Already have an account? <a href="/login">Log In</a>
                     </div>

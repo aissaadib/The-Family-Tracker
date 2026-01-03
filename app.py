@@ -134,12 +134,13 @@ def login():
 def register():
     if request.method == "POST":
         username = request.form.get("username")
-        location = request.form.get("location")
+        lat = request.form.get("lat")
+        lon = request.form.get("lon")
         password = request.form.get("password")
         confirmation = request.form.get("confirmation")
 
-        if not username or not location or not password or not confirmation:
-            flash("All fields are required")
+        if not username or not password or not confirmation:
+            flash("Username and passwords are required")
             return render_template("register.html")
         
         if password != confirmation:
@@ -150,7 +151,19 @@ def register():
 
         conn = get_db_connection()
         try:
-            conn.execute("INSERT INTO users (username, hash, location) VALUES (?, ?, ?)", (username, hash_pw, location))
+            # We store the coordinates in the location field or use them to populate 'people'
+            location_str = f"{lat},{lon}" if lat and lon else "Unknown"
+            cursor = conn.cursor()
+            cursor.execute("INSERT INTO users (username, hash, location) VALUES (?, ?, ?)", (username, hash_pw, location_str))
+            user_id = cursor.lastrowid
+            
+            # Also add to people table for the map
+            if lat and lon:
+                conn.execute(
+                    "INSERT INTO people (name, role, lat, lon, last_update) VALUES (?, ?, ?, ?, ?)",
+                    (username, "User", float(lat), float(lon), int(time.time()))
+                )
+            
             conn.commit()
         except sqlite3.IntegrityError:
             conn.close()
@@ -158,8 +171,6 @@ def register():
             return render_template("register.html")
         
         conn.close()
-        
-        # Auto login
         return redirect(url_for("login"))
 
     return render_template("register.html")
