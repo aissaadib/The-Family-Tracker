@@ -219,19 +219,27 @@ def api_locations():
     # Logic: 
     # 1. Show a person's location if they are Public (vis=1)
     #    We now pull these from the p_map table as requested.
-    # 2. ALSO show everything if the requester is logged in (Private view)
+    # 2. ALSO show friends' locations if the requester is logged in (Private view)
     
     is_logged_in = session.get("user_id") is not None
     is_public_map_request = request.referrer and "public-map" in request.referrer
     
     if is_logged_in and not is_public_map_request:
-        # Logged in users see everything ONLY on Private Map view
+        # Logged in users see themselves AND their friends on the Private Map view
         rows = conn.execute("""
             SELECT p.name, p.role, p.lat, p.lon, p.last_update 
             FROM people p
-        """).fetchall()
+            WHERE p.name IN (
+                SELECT username FROM users WHERE id = ?
+                UNION
+                SELECT u.username 
+                FROM users u
+                JOIN friends f ON u.id = f.friend_id
+                WHERE f.user_id = ?
+            )
+        """, (session["user_id"], session["user_id"])).fetchall()
         
-        # If 'people' is empty, let's at least show the logged in user if they have a location
+        # If 'people' is empty for these users, let's at least show the logged in user if they have a location
         if not rows:
             rows = conn.execute("""
                 SELECT username as name, 'User' as role, 34.020882 as lat, -6.841650 as lon, strftime('%s','now') as last_update
