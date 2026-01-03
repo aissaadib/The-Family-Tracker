@@ -36,7 +36,47 @@ def login_required(f):
 @app.route("/")
 @login_required
 def home():
-    return render_template("home.html")
+    conn = get_db_connection()
+    friends = conn.execute("""
+        SELECT u.id, u.username, u.location 
+        FROM users u
+        JOIN friends f ON u.id = f.friend_id
+        WHERE f.user_id = ?
+    """, (session["user_id"],)).fetchall()
+    conn.close()
+    return render_template("home.html", friends=friends)
+
+@app.route("/searchf", methods=["GET", "POST"])
+@login_required
+def search_friends():
+    users = []
+    if request.method == "POST":
+        query = request.form.get("query", "")
+        conn = get_db_connection()
+        # Search all users except current user and existing friends
+        users = conn.execute("""
+            SELECT id, username 
+            FROM users 
+            WHERE username LIKE ? AND id != ?
+            AND id NOT IN (SELECT friend_id FROM friends WHERE user_id = ?)
+        """, (f"%{query}%", session["user_id"], session["user_id"])).fetchall()
+        conn.close()
+    return render_template("searchf.html", users=users)
+
+@app.route("/add_friend/<int:friend_id>", methods=["POST"])
+@login_required
+def add_friend(friend_id):
+    conn = get_db_connection()
+    try:
+        conn.execute("INSERT INTO friends (user_id, friend_id) VALUES (?, ?)", 
+                     (session["user_id"], friend_id))
+        conn.commit()
+        flash("Friend added successfully!")
+    except sqlite3.IntegrityError:
+        flash("Already friends!")
+    finally:
+        conn.close()
+    return redirect(url_for("home"))
 
 @app.route("/private-map")
 @login_required
