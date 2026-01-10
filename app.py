@@ -239,13 +239,35 @@ def api_locations():
             )
         """, (session["user_id"], session["user_id"])).fetchall()
         
-        # If 'people' is empty for these users, let's at least show the logged in user if they have a location
-        if not rows:
-            rows = conn.execute("""
-                SELECT username as name, 'User' as role, 34.020882 as lat, -6.841650 as lon, strftime('%s','now') as last_update
-                FROM users
-                WHERE id = ?
-            """, (session["user_id"],)).fetchall()
+        # Always ensure the logged-in user's current location from 'users' table is included
+        # if they aren't already in the 'people' table or to ensure latest registration point
+        user_row = conn.execute("""
+            SELECT username as name, 'User' as role, 
+                   CAST(SUBSTR(location, 1, INSTR(location, ',') - 1) AS REAL) as lat,
+                   CAST(SUBSTR(location, INSTR(location, ',') + 1) AS REAL) as lon,
+                   strftime('%s','now') as last_update
+            FROM users
+            WHERE id = ? AND location LIKE '%,%'
+        """, (session["user_id"],)).fetchone()
+
+        # Convert rows to a list so we can append
+        family_rows = [dict(row) for row in rows]
+        
+        # Check if user is already in family_rows by name
+        user_present = any(r['name'] == session['username'] for r in family_rows)
+        if not user_present and user_row:
+            family_rows.append(dict(user_row))
+        
+        # Fallback if both are empty (initial state)
+        if not family_rows:
+            family_rows = [{
+                "name": session["username"],
+                "role": "User",
+                "lat": 34.020882,
+                "lon": -6.841650,
+                "last_update": int(time.time())
+            }]
+        rows = family_rows
     else:
         # Non-logged in users (or Public Map) only see people from p_map
         # We join people with p_map on name=username
