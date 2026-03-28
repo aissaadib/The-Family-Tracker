@@ -30,3 +30,14 @@ CREATE TABLE IF NOT EXISTS map_follows (
     FOREIGN KEY(user_id) REFERENCES users(id),
     FOREIGN KEY(followed_id) REFERENCES users(id)
 );
+
+CREATE TABLE IF NOT EXISTS map_notes (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER NOT NULL,
+    username TEXT NOT NULL,
+    lat REAL NOT NULL,
+    lon REAL NOT NULL,
+    note TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY(user_id) REFERENCES users(id)
+);

@@ -382,6 +382,59 @@ def api_update_my_location():
     conn.close()
     return jsonify({"status": "ok"})
 
+@app.route("/api/notes", methods=["GET"])
+def api_get_notes():
+    conn = get_db_connection()
+    rows = conn.execute(
+        "SELECT id, user_id, username, lat, lon, note, created_at FROM map_notes ORDER BY created_at DESC"
+    ).fetchall()
+    conn.close()
+    return jsonify([dict(r) for r in rows])
+
+@app.route("/api/notes", methods=["POST"])
+@login_required
+def api_add_note():
+    user = get_db_connection().execute(
+        "SELECT vis FROM users WHERE id = ?", (session["user_id"],)
+    ).fetchone()
+    if not user or not user["vis"]:
+        abort(403, "Only public accounts can add notes.")
+    data = request.get_json()
+    if not data:
+        abort(400, "JSON body required")
+    try:
+        lat = float(data["lat"])
+        lon = float(data["lon"])
+        note = str(data["note"]).strip()
+    except (KeyError, ValueError):
+        abort(400, "lat, lon and note are required")
+    if not note:
+        abort(400, "Note cannot be empty")
+    conn = get_db_connection()
+    conn.execute(
+        "INSERT INTO map_notes (user_id, username, lat, lon, note, created_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (session["user_id"], session["username"], lat, lon, note, int(time.time()))
+    )
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "ok"})
+
+@app.route("/api/notes/<int:note_id>", methods=["DELETE"])
+@login_required
+def api_delete_note(note_id):
+    conn = get_db_connection()
+    row = conn.execute("SELECT user_id FROM map_notes WHERE id = ?", (note_id,)).fetchone()
+    if not row:
+        conn.close()
+        abort(404)
+    if row["user_id"] != session["user_id"]:
+        conn.close()
+        abort(403, "You can only delete your own notes.")
+    conn.execute("DELETE FROM map_notes WHERE id = ?", (note_id,))
+    conn.commit()
+    conn.close()
+    return jsonify({"status": "ok"})
+
 @app.route("/tracker/<name>")
 def tracker(name):
     return render_template("tracker.html", name=name)
