@@ -227,24 +227,12 @@ def api_locations():
     is_public_map_request = request.args.get("map") == "public"
     
     if is_logged_in and not is_public_map_request:
-        # Logged in users see themselves, friends, AND map-followed public users
+        # Private map: only show the logged-in user's own location
         rows = conn.execute("""
             SELECT p.name, p.role, p.lat, p.lon, p.last_update 
             FROM people p
-            WHERE p.name IN (
-                SELECT username FROM users WHERE id = ?
-                UNION
-                SELECT u.username 
-                FROM users u
-                JOIN friends f ON u.id = f.friend_id
-                WHERE f.user_id = ?
-                UNION
-                SELECT u.username
-                FROM users u
-                JOIN map_follows mf ON u.id = mf.followed_id
-                WHERE mf.user_id = ? AND u.vis = 1
-            )
-        """, (session["user_id"], session["user_id"], session["user_id"])).fetchall()
+            WHERE p.name = (SELECT username FROM users WHERE id = ?)
+        """, (session["user_id"],)).fetchall()
         
         # Always ensure the logged-in user's current location from 'users' table is included
         # if they aren't already in the 'people' table or to ensure latest registration point
