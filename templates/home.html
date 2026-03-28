@@ -6,50 +6,13 @@
         <div class="card h-100 border-0 p-3 shadow-sm">
             <div class="card-body">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h3 class="card-title h4 fw-bold mb-0 text-primary">Friend List</h3>
-                    <div class="display-6">👥</div>
-                </div>
-                <p class="card-text text-muted mb-4">Stay connected with your inner circle.</p>
-                
-                {% if friends %}
-                <div class="list-group list-group-flush mb-3" style="max-height: 200px; overflow-y: auto;">
-                    {% for friend in friends %}
-                    <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2 border-0">
-                        <div class="d-flex align-items-center">
-                            <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-1 me-2">
-                                <i class="bi bi-person-fill"></i>
-                            </div>
-                            <span class="fw-medium">{{ friend.username }}</span>
-                        </div>
-                    </div>
-                    {% endfor %}
-                </div>
-                <a href="{{ url_for('search_friends') }}" class="btn btn-outline-primary btn-sm w-100 rounded-pill">
-                    <i class="bi bi-person-plus me-2"></i>Find More
-                </a>
-                {% else %}
-                <div class="text-center py-3">
-                    <p class="text-muted small mb-3">No friends yet. Start building your circle!</p>
-                    <a href="{{ url_for('search_friends') }}" class="btn btn-primary w-100 py-2 rounded-pill shadow-sm">
-                        <i class="bi bi-search me-2"></i>Search Friends
-                    </a>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-    </div>
-
-    <div class="col-md-4 mb-4">
-        <div class="card h-100 border-0 p-3 shadow-sm">
-            <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center mb-3">
                     <h3 class="card-title h4 fw-bold mb-0 text-success">On My Map</h3>
                     <div class="display-6">📍</div>
                 </div>
                 <p class="card-text text-muted mb-4">Public users you're tracking on your private map.</p>
 
                 {% if map_follows %}
-                <div class="list-group list-group-flush mb-3" style="max-height: 200px; overflow-y: auto;">
+                <div class="list-group list-group-flush mb-3" style="max-height: 220px; overflow-y: auto;">
                     {% for followed in map_follows %}
                     <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2 border-0">
                         <div class="d-flex align-items-center">
@@ -82,16 +45,14 @@
             <div class="card-body text-center">
                 <div class="display-5 mb-3">🔒</div>
                 <h3 class="card-title h4 fw-bold">Private Map</h3>
-                <p class="card-text text-muted mb-4">Secure, real-time family tracking.</p>
+                <p class="card-text text-muted mb-4">Secure, real-time location tracking.</p>
                 <a href="/private-map" class="btn btn-primary w-100 py-2">Open Private Map</a>
             </div>
         </div>
     </div>
-</div>
 
-<div class="row mt-1">
-    <div class="col-md-12 mb-4">
-        <div class="card border-0 p-3">
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 border-0 p-3">
             <div class="card-body text-center">
                 <div class="display-5 mb-3">🌐</div>
                 <h3 class="card-title h4 fw-bold">Public Map</h3>

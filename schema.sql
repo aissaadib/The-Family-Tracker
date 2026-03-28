@@ -22,13 +22,6 @@ CREATE TABLE IF NOT EXISTS p_map (
     FOREIGN KEY(user_id) REFERENCES users(id)
 );
 
-CREATE TABLE IF NOT EXISTS friends (
-    user_id INTEGER NOT NULL,
-    friend_id INTEGER NOT NULL,
-    PRIMARY KEY (user_id, friend_id),
-    FOREIGN KEY(user_id) REFERENCES users(id),
-    FOREIGN KEY(friend_id) REFERENCES users(id)
-);
 
 CREATE TABLE IF NOT EXISTS map_follows (
     user_id INTEGER NOT NULL,

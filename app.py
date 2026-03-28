@@ -37,12 +37,6 @@ def login_required(f):
 @login_required
 def home():
     conn = get_db_connection()
-    friends = conn.execute("""
-        SELECT u.id, u.username, u.location 
-        FROM users u
-        JOIN friends f ON u.id = f.friend_id
-        WHERE f.user_id = ?
-    """, (session["user_id"],)).fetchall()
     map_follows = conn.execute("""
         SELECT u.id, u.username
         FROM users u
@@ -50,7 +44,7 @@ def home():
         WHERE mf.user_id = ?
     """, (session["user_id"],)).fetchall()
     conn.close()
-    return render_template("home.html", friends=friends, map_follows=map_follows)
+    return render_template("home.html", map_follows=map_follows)
 
 @app.route("/searchf", methods=["GET", "POST"])
 @login_required
@@ -59,39 +53,20 @@ def search_friends():
     if request.method == "POST":
         query = request.form.get("query", "")
         conn = get_db_connection()
-        # Search all users except current user; annotate with friend/map-follow status
         users = conn.execute("""
             SELECT u.id, u.username, u.vis,
-                   CASE WHEN f.friend_id IS NOT NULL THEN 1 ELSE 0 END AS is_friend,
                    CASE WHEN mf.followed_id IS NOT NULL THEN 1 ELSE 0 END AS on_map
             FROM users u
-            LEFT JOIN friends f ON f.user_id = ? AND f.friend_id = u.id
             LEFT JOIN map_follows mf ON mf.user_id = ? AND mf.followed_id = u.id
             WHERE u.username LIKE ? AND u.id != ? AND u.vis = 1
-        """, (session["user_id"], session["user_id"], f"%{query}%", session["user_id"])).fetchall()
+        """, (session["user_id"], f"%{query}%", session["user_id"])).fetchall()
         conn.close()
     return render_template("searchf.html", users=users)
-
-@app.route("/add_friend/<int:friend_id>", methods=["POST"])
-@login_required
-def add_friend(friend_id):
-    conn = get_db_connection()
-    try:
-        conn.execute("INSERT INTO friends (user_id, friend_id) VALUES (?, ?)", 
-                     (session["user_id"], friend_id))
-        conn.commit()
-        flash("Friend added successfully!")
-    except sqlite3.IntegrityError:
-        flash("Already friends!")
-    finally:
-        conn.close()
-    return redirect(url_for("home"))
 
 @app.route("/add_to_map/<int:followed_id>", methods=["POST"])
 @login_required
 def add_to_map(followed_id):
     conn = get_db_connection()
-    # Only allow adding public users
     target = conn.execute("SELECT vis FROM users WHERE id = ?", (followed_id,)).fetchone()
     if not target or not target["vis"]:
         conn.close()
