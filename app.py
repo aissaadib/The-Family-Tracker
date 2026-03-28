@@ -43,8 +43,14 @@ def home():
         JOIN friends f ON u.id = f.friend_id
         WHERE f.user_id = ?
     """, (session["user_id"],)).fetchall()
+    map_follows = conn.execute("""
+        SELECT u.id, u.username
+        FROM users u
+        JOIN map_follows mf ON u.id = mf.followed_id
+        WHERE mf.user_id = ?
+    """, (session["user_id"],)).fetchall()
     conn.close()
-    return render_template("home.html", friends=friends)
+    return render_template("home.html", friends=friends, map_follows=map_follows)
 
 @app.route("/searchf", methods=["GET", "POST"])
 @login_required
@@ -53,13 +59,16 @@ def search_friends():
     if request.method == "POST":
         query = request.form.get("query", "")
         conn = get_db_connection()
-        # Search all users except current user and existing friends
+        # Search all users except current user; annotate with friend/map-follow status
         users = conn.execute("""
-            SELECT id, username 
-            FROM users 
-            WHERE username LIKE ? AND id != ?
-            AND id NOT IN (SELECT friend_id FROM friends WHERE user_id = ?)
-        """, (f"%{query}%", session["user_id"], session["user_id"])).fetchall()
+            SELECT u.id, u.username, u.vis,
+                   CASE WHEN f.friend_id IS NOT NULL THEN 1 ELSE 0 END AS is_friend,
+                   CASE WHEN mf.followed_id IS NOT NULL THEN 1 ELSE 0 END AS on_map
+            FROM users u
+            LEFT JOIN friends f ON f.user_id = ? AND f.friend_id = u.id
+            LEFT JOIN map_follows mf ON mf.user_id = ? AND mf.followed_id = u.id
+            WHERE u.username LIKE ? AND u.id != ?
+        """, (session["user_id"], session["user_id"], f"%{query}%", session["user_id"])).fetchall()
         conn.close()
     return render_template("searchf.html", users=users)
 
@@ -74,6 +83,27 @@ def add_friend(friend_id):
         flash("Friend added successfully!")
     except sqlite3.IntegrityError:
         flash("Already friends!")
+    finally:
+        conn.close()
+    return redirect(url_for("home"))
+
+@app.route("/add_to_map/<int:followed_id>", methods=["POST"])
+@login_required
+def add_to_map(followed_id):
+    conn = get_db_connection()
+    # Only allow adding public users
+    target = conn.execute("SELECT vis FROM users WHERE id = ?", (followed_id,)).fetchone()
+    if not target or not target["vis"]:
+        conn.close()
+        flash("That user has a private account and cannot be added to your map.")
+        return redirect(url_for("search_friends"))
+    try:
+        conn.execute("INSERT INTO map_follows (user_id, followed_id) VALUES (?, ?)",
+                     (session["user_id"], followed_id))
+        conn.commit()
+        flash("User added to your private map!")
+    except sqlite3.IntegrityError:
+        flash("Already on your map!")
     finally:
         conn.close()
     return redirect(url_for("home"))
@@ -225,7 +255,7 @@ def api_locations():
     is_public_map_request = request.referrer and "public-map" in request.referrer
     
     if is_logged_in and not is_public_map_request:
-        # Logged in users see themselves AND their friends on the Private Map view
+        # Logged in users see themselves, friends, AND map-followed public users
         rows = conn.execute("""
             SELECT p.name, p.role, p.lat, p.lon, p.last_update 
             FROM people p
@@ -236,8 +266,13 @@ def api_locations():
                 FROM users u
                 JOIN friends f ON u.id = f.friend_id
                 WHERE f.user_id = ?
+                UNION
+                SELECT u.username
+                FROM users u
+                JOIN map_follows mf ON u.id = mf.followed_id
+                WHERE mf.user_id = ? AND u.vis = 1
             )
-        """, (session["user_id"], session["user_id"])).fetchall()
+        """, (session["user_id"], session["user_id"], session["user_id"])).fetchall()
         
         # Always ensure the logged-in user's current location from 'users' table is included
         # if they aren't already in the 'people' table or to ensure latest registration point

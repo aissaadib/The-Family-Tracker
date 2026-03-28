@@ -38,6 +38,45 @@
             </div>
         </div>
     </div>
+
+    <div class="col-md-4 mb-4">
+        <div class="card h-100 border-0 p-3 shadow-sm">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3 class="card-title h4 fw-bold mb-0 text-success">On My Map</h3>
+                    <div class="display-6">📍</div>
+                </div>
+                <p class="card-text text-muted mb-4">Public users you're tracking on your private map.</p>
+
+                {% if map_follows %}
+                <div class="list-group list-group-flush mb-3" style="max-height: 200px; overflow-y: auto;">
+                    {% for followed in map_follows %}
+                    <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2 border-0">
+                        <div class="d-flex align-items-center">
+                            <div class="bg-success bg-opacity-10 text-success rounded-circle p-1 me-2">
+                                <i class="bi bi-globe2"></i>
+                            </div>
+                            <span class="fw-medium">{{ followed.username }}</span>
+                        </div>
+                        <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 small">Public</span>
+                    </div>
+                    {% endfor %}
+                </div>
+                <a href="{{ url_for('search_friends') }}" class="btn btn-outline-success btn-sm w-100 rounded-pill">
+                    <i class="bi bi-pin-map me-2"></i>Add More
+                </a>
+                {% else %}
+                <div class="text-center py-3">
+                    <p class="text-muted small mb-3">No public users on your map yet.</p>
+                    <a href="{{ url_for('search_friends') }}" class="btn btn-success w-100 py-2 rounded-pill shadow-sm">
+                        <i class="bi bi-search me-2"></i>Find Public Users
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
     <div class="col-md-4 mb-4">
         <div class="card h-100 border-0 p-3">
             <div class="card-body text-center">
@@ -48,12 +87,15 @@
             </div>
         </div>
     </div>
-    <div class="col-md-4 mb-4">
-        <div class="card h-100 border-0 p-3">
+</div>
+
+<div class="row mt-1">
+    <div class="col-md-12 mb-4">
+        <div class="card border-0 p-3">
             <div class="card-body text-center">
                 <div class="display-5 mb-3">🌐</div>
                 <h3 class="card-title h4 fw-bold">Public Map</h3>
-                <p class="card-text text-muted mb-4">View shared authorized locations.</p>
+                <p class="card-text text-muted mb-4">View all publicly shared locations.</p>
                 <a href="/public-map" class="btn btn-outline-primary w-100 py-2">View Public Map</a>
             </div>
         </div>
