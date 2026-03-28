@@ -75,7 +75,7 @@
     <div id="map-wrapper">
       <div id="map"></div>
 
-      {% if map_type == "public" and session.get("user_id") %}
+      {% if session.get("user_id") %}
       <div id="user-sidebar">
         <div class="sb-title">On your map</div>
         <div id="sidebar-users"></div>
