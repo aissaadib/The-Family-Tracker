@@ -385,9 +385,19 @@ def api_update_my_location():
 @app.route("/api/notes", methods=["GET"])
 def api_get_notes():
     conn = get_db_connection()
-    rows = conn.execute(
-        "SELECT id, user_id, username, lat, lon, note, created_at FROM map_notes ORDER BY created_at DESC"
-    ).fetchall()
+    if session.get("user_id"):
+        # Logged-in users only see their own notes + notes from people on their map
+        rows = conn.execute("""
+            SELECT id, user_id, username, lat, lon, note, created_at FROM map_notes
+            WHERE user_id = ?
+               OR user_id IN (SELECT followed_id FROM map_follows WHERE user_id = ?)
+            ORDER BY created_at DESC
+        """, (session["user_id"], session["user_id"])).fetchall()
+    else:
+        # Non-logged-in visitors see all notes on the public map
+        rows = conn.execute(
+            "SELECT id, user_id, username, lat, lon, note, created_at FROM map_notes ORDER BY created_at DESC"
+        ).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
 

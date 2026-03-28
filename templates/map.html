@@ -3,207 +3,276 @@
 {% block head %}
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
-      #map { height: 600px; width: 100%; border-radius: 8px; margin-top: 20px; }
-      #location-status { font-size: 13px; }
+      #map-wrapper { position: relative; margin-top: 20px; }
+      #map { height: 600px; width: 100%; border-radius: 8px; }
+
+      /* ── Sidebar ── */
+      #user-sidebar {
+          position: absolute;
+          top: 10px; right: 10px;
+          z-index: 1000;
+          width: 155px;
+          background: rgba(255,255,255,0.96);
+          border-radius: 12px;
+          padding: 10px 8px;
+          box-shadow: 0 4px 16px rgba(0,0,0,0.13);
+          backdrop-filter: blur(6px);
+          max-height: 560px;
+          overflow-y: auto;
+      }
+      #user-sidebar .sb-title {
+          font-size: 10px; font-weight: 700; letter-spacing: .07em;
+          text-transform: uppercase; color: #94a3b8; margin-bottom: 8px; padding: 0 2px;
+      }
+      .sb-btn {
+          display: flex; align-items: center; gap: 7px;
+          width: 100%; border: none; background: transparent;
+          border-radius: 8px; padding: 6px 6px; cursor: pointer;
+          transition: background .15s; text-align: left; margin-bottom: 2px;
+      }
+      .sb-btn:hover { background: #f1f5f9; }
+      .sb-avatar {
+          width: 26px; height: 26px; border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 13px; flex-shrink: 0;
+      }
+      .sb-name {
+          font-size: 12px; font-weight: 600; color: #1e293b;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+      }
+
+      /* ── Note / hint ── */
       .note-popup textarea { width: 100%; resize: vertical; border: 1px solid #dee2e6; border-radius: 6px; padding: 6px 8px; font-size: 13px; }
-      .note-popup button { margin-top: 6px; }
-      .note-hint { font-size: 13px; background: #fff8e1; border: 1px solid #ffe082; border-radius: 8px; padding: 4px 12px; color: #92400e; }
+      .note-popup button  { margin-top: 6px; }
+      .note-hint { font-size: 12px; background: #fff8e1; border: 1px solid #ffe082; border-radius: 8px; padding: 4px 10px; color: #92400e; }
+      #location-status { font-size: 13px; }
   </style>
 {% endblock %}
 
 {% block main %}
-    <div class="row">
-        <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center mb-3">
-                <h1>{{ title }}</h1>
-                <div class="d-flex gap-2 align-items-center flex-wrap">
-                    {% if map_type == "private" %}
-                    <span id="location-status" class="text-muted">
-                        <i class="bi bi-geo-alt me-1"></i>Locating...
-                    </span>
-                    {% endif %}
-                    {% if session.get("vis") %}
-                    <span class="note-hint">
-                        <i class="bi bi-pencil-square me-1"></i>Click the map to add a note
-                    </span>
-                    {% endif %}
-                    <a href="/" class="btn btn-outline-primary">Home</a>
-                    {% if session.get("user_id") %}
-                    <a href="/logout" class="btn btn-outline-danger">Logout</a>
-                    {% endif %}
-                </div>
-            </div>
-            <div id="map"></div>
-        </div>
+<div class="row">
+  <div class="col-12">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <h1>{{ title }}</h1>
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        {% if map_type == "private" %}
+        <span id="location-status" class="text-muted">
+          <i class="bi bi-geo-alt me-1"></i>Locating...
+        </span>
+        {% endif %}
+        {% if session.get("vis") %}
+        <span class="note-hint">
+          <i class="bi bi-pencil-square me-1"></i>Click map to add note
+        </span>
+        {% endif %}
+        <a href="/" class="btn btn-outline-primary btn-sm">Home</a>
+        {% if session.get("user_id") %}
+        <a href="/logout" class="btn btn-outline-danger btn-sm">Logout</a>
+        {% endif %}
+      </div>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-    <script>
-        const MAP_TYPE   = "{{ map_type }}";
-        const MY_USERNAME = "{{ session.get('username', '') }}";
-        const CAN_ADD_NOTE = {{ 'true' if session.get('vis') else 'false' }};
-        const MY_USER_ID   = {{ session.get('user_id') or 'null' }};
+    <div id="map-wrapper">
+      <div id="map"></div>
 
-        const map = L.map('map').setView([34.020882, -6.841650], 14);
+      {% if map_type == "private" and session.get("user_id") %}
+      <div id="user-sidebar">
+        <div class="sb-title">On your map</div>
+        <div id="sidebar-users"></div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-            attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+    const MAP_TYPE    = "{{ map_type }}";
+    const MY_USERNAME = "{{ session.get('username', '') }}";
+    const CAN_ADD_NOTE = {{ 'true' if session.get('vis') else 'false' }};
+    const MY_USER_ID   = {{ session.get('user_id') or 'null' }};
 
-        let markersLayer = L.layerGroup().addTo(map);
-        let notesLayer   = L.layerGroup().addTo(map);
-        let initialFit   = true;
+    const map = L.map('map').setView([34.020882, -6.841650], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
 
-        // ── Person icon ──────────────────────────────────────────────────────
-        function makeIcon(name, isMe) {
-            const color = isMe ? '#16a34a' : '#4f46e5';
-            const label = isMe ? `${name} (You)` : name;
-            return L.divIcon({
-                html: `
-                    <div style="position:relative;display:flex;flex-direction:column;align-items:center;">
-                        <img src="/static/icon.png" style="width:70px;height:70px;filter:drop-shadow(0 4px 8px rgba(0,0,0,0.4));" alt="location">
-                        <div style="padding:4px 12px;font-size:13px;font-weight:700;white-space:nowrap;margin-top:-8px;z-index:1000;color:${color};text-shadow:0 0 4px white,0 0 4px white,0 0 4px white;">
-                            ${label}
-                        </div>
-                    </div>`,
-                className: '',
-                iconSize: [45, 60],
-                iconAnchor: [22, 45]
-            });
-        }
+    let markersLayer = L.layerGroup().addTo(map);
+    let notesLayer   = L.layerGroup().addTo(map);
+    let initialFit   = true;
+    let peopleData   = [];   // keeps latest positions for sidebar clicks
 
-        // ── Note icon ────────────────────────────────────────────────────────
-        const noteIcon = L.divIcon({
-            html: `<div style="font-size:28px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,0.3));">📝</div>`,
-            className: '',
-            iconSize: [28, 28],
-            iconAnchor: [14, 28]
+    // ── Person icon ────────────────────────────────────────────────────────
+    function makeIcon(name, isMe) {
+        const color = isMe ? '#16a34a' : '#4f46e5';
+        const label = isMe ? `${name} (You)` : name;
+        return L.divIcon({
+            html: `<div style="position:relative;display:flex;flex-direction:column;align-items:center;">
+                       <img src="/static/icon.png" style="width:70px;height:70px;filter:drop-shadow(0 4px 8px rgba(0,0,0,.4));">
+                       <div style="padding:4px 12px;font-size:13px;font-weight:700;white-space:nowrap;margin-top:-8px;z-index:1000;color:${color};text-shadow:0 0 4px white,0 0 4px white,0 0 4px white;">
+                           ${label}
+                       </div>
+                   </div>`,
+            className: '', iconSize: [45, 60], iconAnchor: [22, 45]
         });
+    }
 
-        // ── Load person locations ────────────────────────────────────────────
-        async function loadLocations() {
-            try {
-                const res = await fetch(`/api/locations?map=${MAP_TYPE}`);
-                if (!res.ok) return;
-                const people = await res.json();
+    // ── Note icon (with username label) ────────────────────────────────────
+    function makeNoteIcon(username) {
+        return L.divIcon({
+            html: `<div style="display:flex;flex-direction:column;align-items:center;">
+                       <div style="font-size:26px;line-height:1;filter:drop-shadow(0 2px 4px rgba(0,0,0,.3));">📝</div>
+                       <div style="font-size:10px;font-weight:700;color:#78350f;background:rgba(255,248,225,0.93);border-radius:4px;padding:1px 5px;margin-top:2px;white-space:nowrap;border:1px solid #fde68a;">
+                           ${username}
+                       </div>
+                   </div>`,
+            className: '', iconSize: [70, 46], iconAnchor: [35, 28]
+        });
+    }
 
-                markersLayer.clearLayers();
-                const bounds = [];
-                people.forEach(p => {
-                    const isMe = (p.name === MY_USERNAME);
-                    L.marker([p.lat, p.lon], { icon: makeIcon(p.name, isMe) })
-                        .bindPopup(`<b>${p.name}</b><br>${p.role}<br>Last update: ${new Date(p.last_update * 1000).toLocaleTimeString()}`)
-                        .addTo(markersLayer);
-                    bounds.push([p.lat, p.lon]);
-                });
+    // ── Sidebar ─────────────────────────────────────────────────────────────
+    function updateSidebar(people) {
+        const container = document.getElementById('sidebar-users');
+        if (!container) return;
+        container.innerHTML = '';
+        people.forEach(p => {
+            const isMe = (p.name === MY_USERNAME);
+            const btn = document.createElement('button');
+            btn.className = 'sb-btn';
+            btn.innerHTML = `
+                <span class="sb-avatar" style="background:${isMe ? '#dcfce7' : '#ede9fe'};">
+                    ${isMe ? '🟢' : '👤'}
+                </span>
+                <span class="sb-name">${isMe ? 'You' : p.name}</span>`;
+            btn.addEventListener('click', () => map.flyTo([p.lat, p.lon], 16, { duration: 0.8 }));
+            container.appendChild(btn);
+        });
+    }
 
-                if (initialFit && bounds.length > 0) {
-                    initialFit = false;
-                    bounds.length === 1 ? map.setView(bounds[0], 15) : map.fitBounds(bounds, { padding: [40, 40] });
-                }
-            } catch (e) { console.error(e); }
-        }
+    // ── Load person locations ───────────────────────────────────────────────
+    async function loadLocations() {
+        try {
+            const res = await fetch(`/api/locations?map=${MAP_TYPE}`);
+            if (!res.ok) return;
+            const people = await res.json();
+            peopleData = people;
 
-        // ── Load notes ───────────────────────────────────────────────────────
-        async function loadNotes() {
-            try {
-                const res = await fetch('/api/notes');
-                if (!res.ok) return;
-                const notes = await res.json();
-
-                notesLayer.clearLayers();
-                notes.forEach(n => {
-                    const isOwner = (n.user_id === MY_USER_ID);
-                    const time = new Date(n.created_at * 1000).toLocaleString();
-                    const deleteBtn = isOwner
-                        ? `<br><button class="btn btn-sm btn-outline-danger mt-1 py-0 px-2" onclick="deleteNote(${n.id})">
-                               <i class="bi bi-trash"></i> Delete
-                           </button>`
-                        : '';
-                    L.marker([n.lat, n.lon], { icon: noteIcon })
-                        .bindPopup(`
-                            <b>📝 Note by ${n.username}</b><br>
-                            <span style="white-space:pre-wrap;">${n.note}</span><br>
-                            <small class="text-muted">${time}</small>
-                            ${deleteBtn}`)
-                        .addTo(notesLayer);
-                });
-            } catch (e) { console.error(e); }
-        }
-
-        async function deleteNote(id) {
-            if (!confirm('Delete this note?')) return;
-            await fetch(`/api/notes/${id}`, { method: 'DELETE' });
-            loadNotes();
-        }
-
-        loadLocations();
-        loadNotes();
-        setInterval(loadLocations, 5000);
-        setInterval(loadNotes, 10000);
-
-        // ── Click map to add note (public users only) ─────────────────────────
-        if (CAN_ADD_NOTE) {
-            map.on('click', function (e) {
-                const { lat, lng } = e.latlng;
-                const popup = L.popup({ closeOnClick: false, keepInView: true })
-                    .setLatLng([lat, lng])
-                    .setContent(`
-                        <div class="note-popup">
-                            <b>📝 Add a note here</b><br>
-                            <textarea id="note-input" rows="3" maxlength="300" placeholder="Type your note..."></textarea>
-                            <button class="btn btn-sm btn-primary w-100" onclick="submitNote(${lat}, ${lng})">Save Note</button>
-                        </div>`)
-                    .openOn(map);
+            markersLayer.clearLayers();
+            const bounds = [];
+            people.forEach(p => {
+                const isMe = (p.name === MY_USERNAME);
+                L.marker([p.lat, p.lon], { icon: makeIcon(p.name, isMe) })
+                    .bindPopup(`<b>${p.name}</b><br>${p.role}<br>Last update: ${new Date(p.last_update * 1000).toLocaleTimeString()}`)
+                    .addTo(markersLayer);
+                bounds.push([p.lat, p.lon]);
             });
-        }
 
-        async function submitNote(lat, lng) {
-            const input = document.getElementById('note-input');
-            const text = input ? input.value.trim() : '';
-            if (!text) { alert('Please write something first.'); return; }
-            const res = await fetch('/api/notes', {
+            updateSidebar(people);
+
+            if (initialFit && bounds.length > 0) {
+                initialFit = false;
+                bounds.length === 1
+                    ? map.setView(bounds[0], 15)
+                    : map.fitBounds(bounds, { padding: [40, 40] });
+            }
+        } catch (e) { console.error(e); }
+    }
+
+    // ── Load notes ──────────────────────────────────────────────────────────
+    async function loadNotes() {
+        try {
+            const res = await fetch('/api/notes');
+            if (!res.ok) return;
+            const notes = await res.json();
+
+            notesLayer.clearLayers();
+            notes.forEach(n => {
+                const isOwner = (n.user_id === MY_USER_ID);
+                const time = new Date(n.created_at * 1000).toLocaleString();
+                const deleteBtn = isOwner
+                    ? `<br><button class="btn btn-sm btn-outline-danger mt-1 py-0 px-2" onclick="deleteNote(${n.id})">
+                           <i class="bi bi-trash"></i> Delete
+                       </button>`
+                    : '';
+                L.marker([n.lat, n.lon], { icon: makeNoteIcon(n.username) })
+                    .bindPopup(`
+                        <b>📝 ${n.username}</b><br>
+                        <span style="white-space:pre-wrap;">${n.note}</span><br>
+                        <small class="text-muted">${time}</small>
+                        ${deleteBtn}`)
+                    .addTo(notesLayer);
+            });
+        } catch (e) { console.error(e); }
+    }
+
+    async function deleteNote(id) {
+        if (!confirm('Delete this note?')) return;
+        await fetch(`/api/notes/${id}`, { method: 'DELETE' });
+        loadNotes();
+    }
+
+    loadLocations();
+    loadNotes();
+    setInterval(loadLocations, 5000);
+    setInterval(loadNotes, 10000);
+
+    // ── Click to add note (public users only) ──────────────────────────────
+    if (CAN_ADD_NOTE) {
+        map.on('click', function (e) {
+            const { lat, lng } = e.latlng;
+            L.popup({ closeOnClick: false, keepInView: true })
+                .setLatLng([lat, lng])
+                .setContent(`
+                    <div class="note-popup">
+                        <b>📝 Add a note here</b><br>
+                        <textarea id="note-input" rows="3" maxlength="300" placeholder="Type your note..."></textarea>
+                        <button class="btn btn-sm btn-primary w-100" onclick="submitNote(${lat}, ${lng})">Save Note</button>
+                    </div>`)
+                .openOn(map);
+        });
+    }
+
+    async function submitNote(lat, lng) {
+        const input = document.getElementById('note-input');
+        const text  = input ? input.value.trim() : '';
+        if (!text) { alert('Please write something first.'); return; }
+        const res = await fetch('/api/notes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ lat, lon: lng, note: text })
+        });
+        if (res.ok) { map.closePopup(); loadNotes(); }
+        else        { alert('Could not save note. Try again.'); }
+    }
+
+    // ── Geolocation (private map, logged-in) ───────────────────────────────
+    {% if map_type == "private" and session.get("user_id") %}
+    const statusEl = document.getElementById('location-status');
+
+    async function pushMyLocation(lat, lon) {
+        try {
+            await fetch('/api/update_my_location', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ lat, lon: lng, note: text })
+                body: JSON.stringify({ lat, lon })
             });
-            if (res.ok) {
-                map.closePopup();
-                loadNotes();
-            } else {
-                alert('Could not save note. Try again.');
-            }
-        }
+        } catch (e) { console.error('Location push failed', e); }
+    }
 
-        // ── Geolocation (private map only) ───────────────────────────────────
-        {% if map_type == "private" and session.get("user_id") %}
-        const statusEl = document.getElementById('location-status');
-
-        async function pushMyLocation(lat, lon) {
-            try {
-                await fetch('/api/update_my_location', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ lat, lon })
-                });
-            } catch (e) { console.error('Location push failed', e); }
-        }
-
-        if ('geolocation' in navigator) {
-            navigator.geolocation.watchPosition(
-                (pos) => {
-                    statusEl.innerHTML = '<i class="bi bi-geo-alt-fill text-success me-1"></i>Location active';
-                    pushMyLocation(pos.coords.latitude, pos.coords.longitude);
-                },
-                () => {
-                    statusEl.innerHTML = '<i class="bi bi-geo-alt text-danger me-1"></i>Location unavailable';
-                },
-                { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 }
-            );
-        } else {
-            statusEl.innerHTML = '<i class="bi bi-geo-alt text-warning me-1"></i>Geolocation not supported';
-        }
-        {% endif %}
-    </script>
+    if ('geolocation' in navigator) {
+        navigator.geolocation.watchPosition(
+            pos => {
+                statusEl.innerHTML = '<i class="bi bi-geo-alt-fill text-success me-1"></i>Location active';
+                pushMyLocation(pos.coords.latitude, pos.coords.longitude);
+            },
+            () => {
+                statusEl.innerHTML = '<i class="bi bi-geo-alt text-danger me-1"></i>Location unavailable';
+            },
+            { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 }
+        );
+    } else {
+        statusEl.innerHTML = '<i class="bi bi-geo-alt text-warning me-1"></i>Geolocation not supported';
+    }
+    {% endif %}
+</script>
 {% endblock %}
