@@ -67,7 +67,7 @@ def search_friends():
             FROM users u
             LEFT JOIN friends f ON f.user_id = ? AND f.friend_id = u.id
             LEFT JOIN map_follows mf ON mf.user_id = ? AND mf.followed_id = u.id
-            WHERE u.username LIKE ? AND u.id != ?
+            WHERE u.username LIKE ? AND u.id != ? AND u.vis = 1
         """, (session["user_id"], session["user_id"], f"%{query}%", session["user_id"])).fetchall()
         conn.close()
     return render_template("searchf.html", users=users)
@@ -111,25 +111,11 @@ def add_to_map(followed_id):
 @app.route("/private-map")
 @login_required
 def private_map():
-    conn = get_db_connection()
-    rows = conn.execute("SELECT name, role FROM people").fetchall()
-    conn.close()
-    family = [{"name": row["name"], "role": row["role"]} for row in rows]
-    return render_template("map.html", family=family, title="Private Map")
+    return render_template("map.html", title="Private Map", map_type="private")
 
 @app.route("/public-map")
 def public_map():
-    conn = get_db_connection()
-    # For the legend, only show public people
-    rows = conn.execute("""
-        SELECT p.name, p.role 
-        FROM people p
-        JOIN users u ON p.name = u.username
-        WHERE u.vis = 1
-    """).fetchall()
-    conn.close()
-    family = [{"name": row["name"], "role": row["role"]} for row in rows]
-    return render_template("map.html", family=family, title="Public Map")
+    return render_template("map.html", title="Public Map", map_type="public")
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
@@ -252,7 +238,7 @@ def api_locations():
     # 2. ALSO show friends' locations if the requester is logged in (Private view)
     
     is_logged_in = session.get("user_id") is not None
-    is_public_map_request = request.referrer and "public-map" in request.referrer
+    is_public_map_request = request.args.get("map") == "public"
     
     if is_logged_in and not is_public_map_request:
         # Logged in users see themselves, friends, AND map-followed public users
@@ -376,6 +362,38 @@ def api_update_location():
     conn.commit()
     conn.close()
 
+    return jsonify({"status": "ok"})
+
+@app.route("/api/update_my_location", methods=["POST"])
+@login_required
+def api_update_my_location():
+    """Authenticated endpoint: updates the logged-in user's own location."""
+    data = request.get_json()
+    if not data:
+        abort(400, "JSON body required")
+    try:
+        lat = float(data["lat"])
+        lon = float(data["lon"])
+    except (KeyError, ValueError):
+        abort(400, "lat and lon must be numbers")
+
+    name = session["username"]
+    now = int(time.time())
+    location_str = f"{lat},{lon}"
+
+    conn = get_db_connection()
+    # Update people table
+    cursor = conn.cursor()
+    cursor.execute("UPDATE people SET lat=?, lon=?, last_update=? WHERE name=?", (lat, lon, now, name))
+    if cursor.rowcount == 0:
+        cursor.execute(
+            "INSERT INTO people (name, role, lat, lon, last_update) VALUES (?, 'User', ?, ?, ?)",
+            (name, lat, lon, now)
+        )
+    # Keep users.location in sync
+    conn.execute("UPDATE users SET location=? WHERE id=?", (location_str, session["user_id"]))
+    conn.commit()
+    conn.close()
     return jsonify({"status": "ok"})
 
 @app.route("/tracker/<name>")

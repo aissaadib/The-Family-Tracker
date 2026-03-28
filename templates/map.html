@@ -4,8 +4,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <style>
       #map { height: 600px; width: 100%; border-radius: 8px; margin-top: 20px; }
-      #legend { margin-bottom: 10px; background: #eee; padding: 10px; border-radius: 5px; }
-      #legend span { margin-right: 15px; font-weight: bold; }
+      #location-status { font-size: 13px; }
   </style>
 {% endblock %}
 
@@ -14,16 +13,17 @@
         <div class="col-12">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h1>{{ title }}</h1>
-                <div class="d-flex gap-2">
+                <div class="d-flex gap-2 align-items-center">
+                    {% if map_type == "private" %}
+                    <span id="location-status" class="text-muted">
+                        <i class="bi bi-geo-alt me-1"></i>Locating...
+                    </span>
+                    {% endif %}
                     <a href="/" class="btn btn-outline-primary">Home</a>
+                    {% if session.get("user_id") %}
                     <a href="/logout" class="btn btn-outline-danger">Logout</a>
+                    {% endif %}
                 </div>
-            </div>
-            <div id="legend">
-                <strong>Legend:</strong>
-                {% for p in family %}
-                <span>{{ p.name }} ({{ p.role }})</span>
-                {% endfor %}
             </div>
             <div id="map"></div>
         </div>
@@ -31,6 +31,9 @@
 
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script>
+        const MAP_TYPE = "{{ map_type }}";
+        const MY_USERNAME = "{{ session.get('username', '') }}";
+
         const map = L.map('map').setView([34.020882, -6.841650], 14);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -39,36 +42,87 @@
         }).addTo(map);
 
         let markersLayer = L.layerGroup().addTo(map);
+        let initialFit = true;
+
+        function makeIcon(name, isMe) {
+            const color = isMe ? '#16a34a' : '#4f46e5';
+            const label = isMe ? `${name} (You)` : name;
+            return L.divIcon({
+                html: `
+                    <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
+                        <img src="/static/icon.png" style="width: 70px; height: 70px; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4));" alt="location">
+                        <div style="padding: 4px 12px; font-size: 13px; font-weight: 700; white-space: nowrap; margin-top: -8px; z-index: 1000; color: ${color}; text-shadow: 0 0 4px white, 0 0 4px white, 0 0 4px white;">
+                            ${label}
+                        </div>
+                    </div>`,
+                className: '',
+                iconSize: [45, 60],
+                iconAnchor: [22, 45]
+            });
+        }
 
         async function loadLocations() {
             try {
-                const response = await fetch('/api/locations');
+                const response = await fetch(`/api/locations?map=${MAP_TYPE}`);
                 if (!response.ok) return;
                 const people = await response.json();
-                
+
                 markersLayer.clearLayers();
+                const bounds = [];
+
                 people.forEach(p => {
-                    const marker = L.marker([p.lat, p.lon], {
-                        icon: L.divIcon({
-                            html: `
-                                <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
-                                    <img src="/static/icon.png" style="width: 70px; height: 70px; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.4));" alt="location">
-                                    <div style="padding: 4px 12px; font-size: 13px; font-weight: 700; white-space: nowrap; margin-top: -8px; z-index: 1000; color: #4f46e5; text-shadow: 0 0 4px white, 0 0 4px white, 0 0 4px white;">
-                                        ${p.name}
-                                    </div>
-                                </div>`,
-                            className: '',
-                            iconSize: [45, 60],
-                            iconAnchor: [22, 45]
-                        })
-                    })
-                     .bindPopup(`<b>${p.name}</b><br>${p.role}<br>Last update: ${new Date(p.last_update*1000).toLocaleTimeString()}`);
+                    const isMe = (p.name === MY_USERNAME);
+                    const marker = L.marker([p.lat, p.lon], { icon: makeIcon(p.name, isMe) })
+                        .bindPopup(`<b>${p.name}</b><br>${p.role}<br>Last update: ${new Date(p.last_update * 1000).toLocaleTimeString()}`);
                     marker.addTo(markersLayer);
+                    bounds.push([p.lat, p.lon]);
                 });
+
+                // Fit map to show all markers on first load
+                if (initialFit && bounds.length > 0) {
+                    initialFit = false;
+                    if (bounds.length === 1) {
+                        map.setView(bounds[0], 15);
+                    } else {
+                        map.fitBounds(bounds, { padding: [40, 40] });
+                    }
+                }
             } catch (e) { console.error(e); }
         }
-        
+
         loadLocations();
         setInterval(loadLocations, 5000);
+
+        // --- Geolocation: only active on the private map for logged-in users ---
+        {% if map_type == "private" and session.get("user_id") %}
+        const statusEl = document.getElementById('location-status');
+
+        async function pushMyLocation(lat, lon) {
+            try {
+                await fetch('/api/update_my_location', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ lat, lon })
+                });
+            } catch (e) { console.error('Location push failed', e); }
+        }
+
+        if ('geolocation' in navigator) {
+            navigator.geolocation.watchPosition(
+                (pos) => {
+                    const { latitude, longitude } = pos.coords;
+                    statusEl.innerHTML = '<i class="bi bi-geo-alt-fill text-success me-1"></i>Location active';
+                    pushMyLocation(latitude, longitude);
+                },
+                (err) => {
+                    statusEl.innerHTML = '<i class="bi bi-geo-alt text-danger me-1"></i>Location unavailable';
+                    console.warn('Geolocation error', err);
+                },
+                { enableHighAccuracy: true, maximumAge: 10000, timeout: 10000 }
+            );
+        } else {
+            statusEl.innerHTML = '<i class="bi bi-geo-alt text-warning me-1"></i>Geolocation not supported';
+        }
+        {% endif %}
     </script>
 {% endblock %}
