@@ -85,7 +85,7 @@ def search_friends():
                    ON fr_sent.from_user_id = ? AND fr_sent.to_user_id = u.id
             LEFT JOIN friend_requests fr_recv
                    ON fr_recv.to_user_id = ? AND fr_recv.from_user_id = u.id
-            WHERE u.username LIKE ? AND u.id != ? AND u.vis = 1
+            WHERE u.username LIKE ? AND u.id != ?
         """, (session["user_id"], session["user_id"], session["user_id"],
               f"%{query}%", session["user_id"])).fetchall()
         conn.close()
@@ -127,9 +127,9 @@ def add_to_map(followed_id):
 def send_request(to_id):
     conn = get_db_connection()
     target = conn.execute("SELECT vis FROM users WHERE id = ?", (to_id,)).fetchone()
-    if not target or not target["vis"]:
+    if not target:
         conn.close()
-        flash("That user has a private account.")
+        flash("User not found.")
         return redirect(url_for("search_friends"))
     try:
         conn.execute(
