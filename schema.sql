@@ -50,5 +50,6 @@ CREATE TABLE IF NOT EXISTS map_notes (
     lon REAL NOT NULL,
     note TEXT NOT NULL,
     created_at INTEGER NOT NULL,
+    scope TEXT DEFAULT 'public',
     FOREIGN KEY(user_id) REFERENCES users(id)
 );

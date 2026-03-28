@@ -60,7 +60,7 @@
           <i class="bi bi-geo-alt me-1"></i>Locating...
         </span>
         {% endif %}
-        {% if map_type == "public" and session.get("vis") %}
+        {% if (map_type == "public" and session.get("vis")) or (map_type == "private" and session.get("user_id")) %}
         <span class="note-hint">
           <i class="bi bi-pencil-square me-1"></i>Click map to add note
         </span>
@@ -89,7 +89,8 @@
 <script>
     const MAP_TYPE    = "{{ map_type }}";
     const MY_USERNAME = "{{ session.get('username', '') }}";
-    const CAN_ADD_NOTE = {{ 'true' if session.get('vis') else 'false' }};
+    const CAN_ADD_NOTE = {{ 'true' if (session.get('vis') or (map_type == 'private' and session.get('user_id'))) else 'false' }};
+    const NOTE_SCOPE   = "{{ map_type }}";
     const MY_USER_ID   = {{ session.get('user_id') or 'null' }};
 
     const map = L.map('map').setView([34.020882, -6.841650], 14);
@@ -181,7 +182,7 @@
     // ── Load notes ──────────────────────────────────────────────────────────
     async function loadNotes() {
         try {
-            const res = await fetch('/api/notes');
+            const res = await fetch(`/api/notes?scope=${NOTE_SCOPE}`);
             if (!res.ok) return;
             const notes = await res.json();
 
@@ -214,13 +215,11 @@
     loadLocations();
     setInterval(loadLocations, 5000);
 
-    if (MAP_TYPE === 'public') {
-        loadNotes();
-        setInterval(loadNotes, 10000);
-    }
+    loadNotes();
+    setInterval(loadNotes, 10000);
 
-    // ── Click to add note (public map + public account only) ───────────────
-    if (MAP_TYPE === 'public' && CAN_ADD_NOTE) {
+    // ── Click to add note ──────────────────────────────────────────────────
+    if (CAN_ADD_NOTE) {
         map.on('click', function (e) {
             const { lat, lng } = e.latlng;
             L.popup({ closeOnClick: false, keepInView: true })
@@ -242,7 +241,7 @@
         const res = await fetch('/api/notes', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ lat, lon: lng, note: text })
+            body: JSON.stringify({ lat, lon: lng, note: text, scope: NOTE_SCOPE })
         });
         if (res.ok) { map.closePopup(); loadNotes(); }
         else        { alert('Could not save note. Try again.'); }

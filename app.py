@@ -157,16 +157,24 @@ def accept_request(req_id):
         flash("Request not found.")
         return redirect(url_for("home"))
     conn.execute("UPDATE friend_requests SET status = 'accepted' WHERE id = ?", (req_id,))
-    # Mutually add to each other's map
-    for uid, fid in [(req["from_user_id"], req["to_user_id"]),
-                     (req["to_user_id"], req["from_user_id"])]:
+    # Determine if the acceptor (me) is private or public
+    acceptor = conn.execute("SELECT vis FROM users WHERE id = ?", (session["user_id"],)).fetchone()
+    acceptor_is_public = acceptor and acceptor["vis"]
+    if acceptor_is_public:
+        # Public acceptor: both users see each other on their private maps
+        pairs = [(req["from_user_id"], req["to_user_id"]),
+                 (req["to_user_id"], req["from_user_id"])]
+    else:
+        # Private acceptor: only the sender sees the acceptor on their private map
+        pairs = [(req["from_user_id"], req["to_user_id"])]
+    for uid, fid in pairs:
         try:
             conn.execute("INSERT INTO map_follows (user_id, followed_id) VALUES (?, ?)", (uid, fid))
         except sqlite3.IntegrityError:
             pass
     conn.commit()
     conn.close()
-    flash("Friend request accepted! You're now on each other's map.")
+    flash("Friend request accepted!")
     return redirect(url_for("home"))
 
 @app.route("/decline_request/<int:req_id>", methods=["POST"])
@@ -467,19 +475,31 @@ def api_update_my_location():
 
 @app.route("/api/notes", methods=["GET"])
 def api_get_notes():
+    scope = request.args.get("scope", "public")
     conn = get_db_connection()
     if session.get("user_id"):
-        # Logged-in users only see their own notes + notes from people on their map
-        rows = conn.execute("""
-            SELECT id, user_id, username, lat, lon, note, created_at FROM map_notes
-            WHERE user_id = ?
-               OR user_id IN (SELECT followed_id FROM map_follows WHERE user_id = ?)
-            ORDER BY created_at DESC
-        """, (session["user_id"], session["user_id"])).fetchall()
+        if scope == "private":
+            # Private notes: own notes + notes from connections
+            rows = conn.execute("""
+                SELECT id, user_id, username, lat, lon, note, created_at, scope FROM map_notes
+                WHERE scope = 'private'
+                  AND (user_id = ?
+                       OR user_id IN (SELECT followed_id FROM map_follows WHERE user_id = ?))
+                ORDER BY created_at DESC
+            """, (session["user_id"], session["user_id"])).fetchall()
+        else:
+            # Public notes: own + connections' public notes
+            rows = conn.execute("""
+                SELECT id, user_id, username, lat, lon, note, created_at, scope FROM map_notes
+                WHERE scope = 'public'
+                  AND (user_id = ?
+                       OR user_id IN (SELECT followed_id FROM map_follows WHERE user_id = ?))
+                ORDER BY created_at DESC
+            """, (session["user_id"], session["user_id"])).fetchall()
     else:
-        # Non-logged-in visitors see all notes on the public map
+        # Non-logged-in visitors see all public notes
         rows = conn.execute(
-            "SELECT id, user_id, username, lat, lon, note, created_at FROM map_notes ORDER BY created_at DESC"
+            "SELECT id, user_id, username, lat, lon, note, created_at, scope FROM map_notes WHERE scope = 'public' ORDER BY created_at DESC"
         ).fetchall()
     conn.close()
     return jsonify([dict(r) for r in rows])
@@ -487,14 +507,18 @@ def api_get_notes():
 @app.route("/api/notes", methods=["POST"])
 @login_required
 def api_add_note():
-    user = get_db_connection().execute(
-        "SELECT vis FROM users WHERE id = ?", (session["user_id"],)
-    ).fetchone()
-    if not user or not user["vis"]:
-        abort(403, "Only public accounts can add notes.")
     data = request.get_json()
     if not data:
         abort(400, "JSON body required")
+    scope = data.get("scope", "public")
+    if scope not in ("public", "private"):
+        abort(400, "scope must be 'public' or 'private'")
+    if scope == "public":
+        user = get_db_connection().execute(
+            "SELECT vis FROM users WHERE id = ?", (session["user_id"],)
+        ).fetchone()
+        if not user or not user["vis"]:
+            abort(403, "Only public accounts can add notes to the public map.")
     try:
         lat = float(data["lat"])
         lon = float(data["lon"])
@@ -505,8 +529,8 @@ def api_add_note():
         abort(400, "Note cannot be empty")
     conn = get_db_connection()
     conn.execute(
-        "INSERT INTO map_notes (user_id, username, lat, lon, note, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (session["user_id"], session["username"], lat, lon, note, int(time.time()))
+        "INSERT INTO map_notes (user_id, username, lat, lon, note, created_at, scope) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (session["user_id"], session["username"], lat, lon, note, int(time.time()), scope)
     )
     conn.commit()
     conn.close()
