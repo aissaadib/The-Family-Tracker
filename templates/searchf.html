@@ -6,7 +6,7 @@
         <div class="col-md-8">
             <div class="card shadow-sm border-0 rounded-lg">
                 <div class="card-header bg-white border-bottom py-3">
-                    <h4 class="mb-0 fw-bold text-primary">Find Users</h4>
+                    <h4 class="mb-0 fw-bold text-primary">Find People</h4>
                 </div>
                 <div class="card-body p-4">
                     <form method="POST" class="mb-4">
@@ -19,12 +19,7 @@
                         </div>
                     </form>
 
-                    <style>
-                        .focus-none:focus {
-                            box-shadow: none;
-                            border-color: #dee2e6;
-                        }
-                    </style>
+                    <style>.focus-none:focus { box-shadow: none; border-color: #dee2e6; }</style>
 
                     {% if users %}
                     <div class="list-group">
@@ -41,17 +36,38 @@
                                     </span>
                                 </div>
                             </div>
-                            {% if user.on_map %}
-                            <span class="btn btn-sm btn-outline-success rounded-pill px-3 disabled">
-                                <i class="bi bi-map-fill me-1"></i>On Map
-                            </span>
-                            {% else %}
-                            <form action="{{ url_for('add_to_map', followed_id=user.id) }}" method="POST">
-                                <button type="submit" class="btn btn-sm btn-success rounded-pill px-3">
-                                    <i class="bi bi-pin-map me-1"></i>Add to Map
-                                </button>
-                            </form>
-                            {% endif %}
+
+                            <div>
+                                {% if user.on_map %}
+                                    <span class="btn btn-sm btn-success rounded-pill px-3 disabled">
+                                        <i class="bi bi-check2-circle me-1"></i>Connected
+                                    </span>
+                                {% elif user.recv_status == 'pending' %}
+                                    {# They sent us a request — show Accept/Decline inline #}
+                                    <div class="d-flex gap-2">
+                                        <form action="{{ url_for('accept_request', req_id=user.recv_id) }}" method="POST">
+                                            <button class="btn btn-sm btn-success rounded-pill px-3">
+                                                <i class="bi bi-check2 me-1"></i>Accept
+                                            </button>
+                                        </form>
+                                        <form action="{{ url_for('decline_request', req_id=user.recv_id) }}" method="POST">
+                                            <button class="btn btn-sm btn-outline-danger rounded-pill px-2">
+                                                <i class="bi bi-x-lg"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                {% elif user.sent_status == 'pending' %}
+                                    <span class="btn btn-sm btn-outline-secondary rounded-pill px-3 disabled">
+                                        <i class="bi bi-clock me-1"></i>Request Sent
+                                    </span>
+                                {% else %}
+                                    <form action="{{ url_for('send_request', to_id=user.id) }}" method="POST">
+                                        <button class="btn btn-sm btn-primary rounded-pill px-3">
+                                            <i class="bi bi-person-plus me-1"></i>Send Request
+                                        </button>
+                                    </form>
+                                {% endif %}
+                            </div>
                         </div>
                         {% endfor %}
                     </div>

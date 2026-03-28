@@ -88,6 +88,17 @@
                                 </button>
                             </form>
                         </li>
+                        <!-- FRIEND REQUESTS BADGE -->
+                        <li class="nav-item me-2">
+                            <a href="/" class="btn btn-light btn-sm position-relative rounded-pill px-3 shadow-sm">
+                                <i class="bi bi-people-fill me-1"></i>Requests
+                                {% if pending_requests_count > 0 %}
+                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-light" style="font-size:.6rem;padding:.25em .4em;">
+                                    {{ pending_requests_count }}
+                                </span>
+                                {% endif %}
+                            </a>
+                        </li>
                         <li class="nav-item px-2">
                             <span class="navbar-text fw-medium text-dark me-3">
                                 Hi, {{ session["username"] }}

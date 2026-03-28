@@ -25,6 +25,18 @@ def init_db():
         conn.executescript(f.read())
     conn.close()
 
+@app.context_processor
+def inject_pending_requests():
+    if session.get("user_id"):
+        conn = get_db_connection()
+        count = conn.execute(
+            "SELECT COUNT(*) FROM friend_requests WHERE to_user_id = ? AND status = 'pending'",
+            (session["user_id"],)
+        ).fetchone()[0]
+        conn.close()
+        return {"pending_requests_count": count}
+    return {"pending_requests_count": 0}
+
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
@@ -43,8 +55,15 @@ def home():
         JOIN map_follows mf ON u.id = mf.followed_id
         WHERE mf.user_id = ?
     """, (session["user_id"],)).fetchall()
+    incoming = conn.execute("""
+        SELECT fr.id, u.username
+        FROM friend_requests fr
+        JOIN users u ON u.id = fr.from_user_id
+        WHERE fr.to_user_id = ? AND fr.status = 'pending'
+        ORDER BY fr.created_at DESC
+    """, (session["user_id"],)).fetchall()
     conn.close()
-    return render_template("home.html", map_follows=map_follows)
+    return render_template("home.html", map_follows=map_follows, incoming=incoming)
 
 @app.route("/searchf", methods=["GET", "POST"])
 @login_required
@@ -55,11 +74,20 @@ def search_friends():
         conn = get_db_connection()
         users = conn.execute("""
             SELECT u.id, u.username, u.vis,
-                   CASE WHEN mf.followed_id IS NOT NULL THEN 1 ELSE 0 END AS on_map
+                   CASE WHEN mf.followed_id IS NOT NULL THEN 1 ELSE 0 END AS on_map,
+                   fr_sent.status AS sent_status,
+                   fr_recv.id AS recv_id,
+                   fr_recv.status AS recv_status
             FROM users u
-            LEFT JOIN map_follows mf ON mf.user_id = ? AND mf.followed_id = u.id
+            LEFT JOIN map_follows mf
+                   ON mf.user_id = ? AND mf.followed_id = u.id
+            LEFT JOIN friend_requests fr_sent
+                   ON fr_sent.from_user_id = ? AND fr_sent.to_user_id = u.id
+            LEFT JOIN friend_requests fr_recv
+                   ON fr_recv.to_user_id = ? AND fr_recv.from_user_id = u.id
             WHERE u.username LIKE ? AND u.id != ? AND u.vis = 1
-        """, (session["user_id"], f"%{query}%", session["user_id"])).fetchall()
+        """, (session["user_id"], session["user_id"], session["user_id"],
+              f"%{query}%", session["user_id"])).fetchall()
         conn.close()
     return render_template("searchf.html", users=users)
 
@@ -92,6 +120,66 @@ def add_to_map(followed_id):
         flash("Already on your map!")
     finally:
         conn.close()
+    return redirect(url_for("home"))
+
+@app.route("/send_request/<int:to_id>", methods=["POST"])
+@login_required
+def send_request(to_id):
+    conn = get_db_connection()
+    target = conn.execute("SELECT vis FROM users WHERE id = ?", (to_id,)).fetchone()
+    if not target or not target["vis"]:
+        conn.close()
+        flash("That user has a private account.")
+        return redirect(url_for("search_friends"))
+    try:
+        conn.execute(
+            "INSERT INTO friend_requests (from_user_id, to_user_id, created_at) VALUES (?, ?, ?)",
+            (session["user_id"], to_id, int(time.time()))
+        )
+        conn.commit()
+        flash("Friend request sent!")
+    except sqlite3.IntegrityError:
+        flash("Request already sent.")
+    finally:
+        conn.close()
+    return redirect(url_for("search_friends"))
+
+@app.route("/accept_request/<int:req_id>", methods=["POST"])
+@login_required
+def accept_request(req_id):
+    conn = get_db_connection()
+    req = conn.execute(
+        "SELECT * FROM friend_requests WHERE id = ? AND to_user_id = ? AND status = 'pending'",
+        (req_id, session["user_id"])
+    ).fetchone()
+    if not req:
+        conn.close()
+        flash("Request not found.")
+        return redirect(url_for("home"))
+    conn.execute("UPDATE friend_requests SET status = 'accepted' WHERE id = ?", (req_id,))
+    # Mutually add to each other's map
+    for uid, fid in [(req["from_user_id"], req["to_user_id"]),
+                     (req["to_user_id"], req["from_user_id"])]:
+        try:
+            conn.execute("INSERT INTO map_follows (user_id, followed_id) VALUES (?, ?)", (uid, fid))
+        except sqlite3.IntegrityError:
+            pass
+    conn.commit()
+    conn.close()
+    flash("Friend request accepted! You're now on each other's map.")
+    return redirect(url_for("home"))
+
+@app.route("/decline_request/<int:req_id>", methods=["POST"])
+@login_required
+def decline_request(req_id):
+    conn = get_db_connection()
+    conn.execute(
+        "DELETE FROM friend_requests WHERE id = ? AND to_user_id = ?",
+        (req_id, session["user_id"])
+    )
+    conn.commit()
+    conn.close()
+    flash("Request declined.")
     return redirect(url_for("home"))
 
 @app.route("/private-map")

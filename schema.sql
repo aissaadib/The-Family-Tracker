@@ -23,6 +23,17 @@ CREATE TABLE IF NOT EXISTS p_map (
 );
 
 
+CREATE TABLE IF NOT EXISTS friend_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_user_id INTEGER NOT NULL,
+    to_user_id INTEGER NOT NULL,
+    status TEXT DEFAULT 'pending',
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY(from_user_id) REFERENCES users(id),
+    FOREIGN KEY(to_user_id) REFERENCES users(id),
+    UNIQUE(from_user_id, to_user_id)
+);
+
 CREATE TABLE IF NOT EXISTS map_follows (
     user_id INTEGER NOT NULL,
     followed_id INTEGER NOT NULL,
