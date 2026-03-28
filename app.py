@@ -63,6 +63,17 @@ def search_friends():
         conn.close()
     return render_template("searchf.html", users=users)
 
+@app.route("/remove_from_map/<int:followed_id>", methods=["POST"])
+@login_required
+def remove_from_map(followed_id):
+    conn = get_db_connection()
+    conn.execute("DELETE FROM map_follows WHERE user_id = ? AND followed_id = ?",
+                 (session["user_id"], followed_id))
+    conn.commit()
+    conn.close()
+    flash("User removed from your map.")
+    return redirect(url_for("home"))
+
 @app.route("/add_to_map/<int:followed_id>", methods=["POST"])
 @login_required
 def add_to_map(followed_id):

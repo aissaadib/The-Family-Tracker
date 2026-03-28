@@ -21,7 +21,13 @@
                             </div>
                             <span class="fw-medium">{{ followed.username }}</span>
                         </div>
-                        <span class="badge bg-success bg-opacity-10 text-success border border-success border-opacity-25 small">Public</span>
+                        <form action="{{ url_for('remove_from_map', followed_id=followed.id) }}" method="POST" class="ms-2">
+                            <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-2 py-0"
+                                    title="Remove from map"
+                                    onclick="return confirm('Remove {{ followed.username }} from your map?')">
+                                <i class="bi bi-x-lg"></i>
+                            </button>
+                        </form>
                     </div>
                     {% endfor %}
                 </div>
