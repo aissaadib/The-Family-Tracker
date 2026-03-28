@@ -60,7 +60,7 @@
           <i class="bi bi-geo-alt me-1"></i>Locating...
         </span>
         {% endif %}
-        {% if session.get("vis") %}
+        {% if map_type == "public" and session.get("vis") %}
         <span class="note-hint">
           <i class="bi bi-pencil-square me-1"></i>Click map to add note
         </span>
@@ -75,7 +75,7 @@
     <div id="map-wrapper">
       <div id="map"></div>
 
-      {% if map_type == "private" and session.get("user_id") %}
+      {% if map_type == "public" and session.get("user_id") %}
       <div id="user-sidebar">
         <div class="sb-title">On your map</div>
         <div id="sidebar-users"></div>
@@ -212,12 +212,15 @@
     }
 
     loadLocations();
-    loadNotes();
     setInterval(loadLocations, 5000);
-    setInterval(loadNotes, 10000);
 
-    // ── Click to add note (public users only) ──────────────────────────────
-    if (CAN_ADD_NOTE) {
+    if (MAP_TYPE === 'public') {
+        loadNotes();
+        setInterval(loadNotes, 10000);
+    }
+
+    // ── Click to add note (public map + public account only) ───────────────
+    if (MAP_TYPE === 'public' && CAN_ADD_NOTE) {
         map.on('click', function (e) {
             const { lat, lng } = e.latlng;
             L.popup({ closeOnClick: false, keepInView: true })
