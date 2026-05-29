@@ -1,6 +1,50 @@
-node_modules
-dist
-.DS_Store
-server/public
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+
+# Virtual environments
+.venv/
+venv/
+env/
+.pythonlibs/
+
+# Flask
+flask_session/
+instance/
+
+# Database (keep schema.sql, ignore the actual db file)
+*.db
+*.sqlite
+*.sqlite3
+
+# Replit-specific
+.replit
+.upm/
+.cache/
+.local/
+.agents/
+replit.md
+
+# Node / frontend artifacts
+node_modules/
+dist/
+server/public/
 vite.config.ts.*
+
+# Assets / screenshots (not needed in repo)
+attached_assets/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Misc
 *.tar.gz
+*.log
+uv.lock
