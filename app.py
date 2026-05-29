@@ -340,18 +340,26 @@ def api_geofence_alerts():
         JOIN users u ON u.id = pc.parent_id
         WHERE pc.child_id = ? AND pc.outside_geofence = 1 AND pc.geofence_radius IS NOT NULL
     """, (session["user_id"],)).fetchall()
-    # Also return geofence circles for parent's private map
+    # Geofence circles for parent's private map (my children's zones)
     geofences = conn.execute("""
         SELECT pc.child_id, u.username AS child_name, pc.geofence_lat, pc.geofence_lon, pc.geofence_radius
         FROM parent_child pc
         JOIN users u ON u.id = pc.child_id
         WHERE pc.parent_id = ? AND pc.geofence_radius IS NOT NULL
     """, (session["user_id"],)).fetchall()
+    # Geofence circles for child's private map (zones I must stay within)
+    my_zones = conn.execute("""
+        SELECT u.username AS parent_name, pc.geofence_lat, pc.geofence_lon, pc.geofence_radius
+        FROM parent_child pc
+        JOIN users u ON u.id = pc.parent_id
+        WHERE pc.child_id = ? AND pc.geofence_radius IS NOT NULL
+    """, (session["user_id"],)).fetchall()
     conn.close()
     return jsonify({
         "parent_alerts": [dict(r) for r in parent_alerts],
         "child_alerts": [dict(r) for r in child_alerts],
-        "geofences": [dict(r) for r in geofences]
+        "geofences": [dict(r) for r in geofences],
+        "my_zones": [dict(r) for r in my_zones]
     })
 
 @app.route("/private-map")

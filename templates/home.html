@@ -196,38 +196,46 @@
   </div>
 </div>
 
+<!-- Leaflet for geofence modal -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <!-- Geofence Modal -->
 <div class="modal fade" id="geofenceModal" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content border-0 shadow-lg rounded-4">
       <div class="modal-header border-0 pb-0">
-        <h5 class="modal-title fw-bold"><i class="bi bi-geo-alt-fill text-success me-2"></i>Set Safe Zone</h5>
+        <h5 class="modal-title fw-bold"><i class="bi bi-geo-alt-fill text-success me-2"></i>Set Safe Zone for <span id="gf-child-name"></span></h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body pt-2">
-        <p class="text-muted small mb-3">The safe zone will be centred on <strong id="gf-child-name"></strong>'s current location.</p>
+        <p class="text-muted small mb-2"><i class="bi bi-cursor me-1"></i>Click anywhere on the map to move the zone centre. Drag the map to navigate.</p>
 
-        <label class="form-label fw-medium">Radius</label>
-        <div class="d-flex align-items-center gap-3 mb-2">
+        <!-- Mini map -->
+        <div id="gf-map" style="height:280px;border-radius:12px;border:1px solid #e2e8f0;margin-bottom:14px;"></div>
+
+        <!-- Radius controls -->
+        <label class="form-label fw-medium mb-1">Radius</label>
+        <div class="d-flex align-items-center gap-3 mb-1">
           <input type="range" class="form-range flex-grow-1" id="gf-slider"
                  min="100" max="50000" step="100" value="1000"
-                 oninput="syncGeofenceInputs('slider')">
+                 oninput="syncGfInputs('slider')">
           <div class="input-group" style="width:130px;">
             <input type="number" class="form-control form-control-sm text-center" id="gf-input"
                    min="0.1" step="0.1" value="1"
-                   oninput="syncGeofenceInputs('text')">
+                   oninput="syncGfInputs('text')">
             <span class="input-group-text bg-light small">km</span>
           </div>
         </div>
-        <div class="d-flex justify-content-between text-muted" style="font-size:11px;">
+        <div class="d-flex justify-content-between text-muted mb-3" style="font-size:11px;">
           <span>100 m</span><span>5 km</span><span>50 km</span>
         </div>
 
-        <div class="alert alert-success mt-3 py-2 small rounded-3" id="gf-preview">
-          Safe zone: <strong id="gf-preview-val">1.00 km</strong> radius
+        <div class="alert alert-success py-2 small rounded-3 mb-0">
+          Zone centre: <span id="gf-coords">—</span> &nbsp;·&nbsp; Radius: <strong id="gf-preview-val">1.00 km</strong>
         </div>
       </div>
-      <div class="modal-footer border-0 pt-0">
+      <div class="modal-footer border-0 pt-2">
         <button class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
         <button class="btn btn-success rounded-pill px-4 fw-bold" onclick="confirmGeofence()">
           <i class="bi bi-check2-circle me-1"></i>Set Safe Zone
@@ -238,20 +246,71 @@
 </div>
 
 <script>
-let gfChildId = null;
-let gfChildName = null;
+let gfChildId = null, gfChildName = null;
+let gfMap = null, gfMarker = null, gfCircle = null;
+let gfLat = 34.020882, gfLon = -6.841650;
 
 function setGeofence(childId, childName) {
-    gfChildId = childId;
+    gfChildId   = childId;
     gfChildName = childName;
     document.getElementById('gf-child-name').textContent = childName;
     document.getElementById('gf-slider').value = 1000;
-    document.getElementById('gf-input').value = '1';
+    document.getElementById('gf-input').value  = '1';
     document.getElementById('gf-preview-val').textContent = '1.00 km';
-    new bootstrap.Modal(document.getElementById('geofenceModal')).show();
+
+    const modal = new bootstrap.Modal(document.getElementById('geofenceModal'));
+    modal.show();
+
+    // Wait for modal to be visible before initialising Leaflet
+    document.getElementById('geofenceModal').addEventListener('shown.bs.modal', initGfMap, { once: true });
 }
 
-function syncGeofenceInputs(source) {
+async function initGfMap() {
+    // Fetch child's current location as default centre
+    const people = await fetch('/api/locations?map=private').then(r => r.json()).catch(() => []);
+    const child  = people.find(p => p.name === gfChildName);
+    gfLat = child ? child.lat : 34.020882;
+    gfLon = child ? child.lon : -6.841650;
+
+    if (gfMap) { gfMap.remove(); gfMap = null; }
+    gfMap = L.map('gf-map').setView([gfLat, gfLon], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19, attribution: '© OpenStreetMap'
+    }).addTo(gfMap);
+
+    gfMarker = L.marker([gfLat, gfLon], { draggable: true })
+        .addTo(gfMap)
+        .bindTooltip('Zone centre — drag or click map to move', { permanent: false });
+
+    gfCircle = L.circle([gfLat, gfLon], {
+        radius: 1000,
+        color: '#10b981', fillColor: '#10b981', fillOpacity: 0.15, weight: 2
+    }).addTo(gfMap);
+
+    updateGfCoords(gfLat, gfLon);
+
+    gfMarker.on('drag', e => {
+        const { lat, lng } = e.latlng;
+        gfLat = lat; gfLon = lng;
+        gfCircle.setLatLng([lat, lng]);
+        updateGfCoords(lat, lng);
+    });
+
+    gfMap.on('click', e => {
+        const { lat, lng } = e.latlng;
+        gfLat = lat; gfLon = lng;
+        gfMarker.setLatLng([lat, lng]);
+        gfCircle.setLatLng([lat, lng]);
+        updateGfCoords(lat, lng);
+    });
+}
+
+function updateGfCoords(lat, lon) {
+    document.getElementById('gf-coords').textContent =
+        `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+}
+
+function syncGfInputs(source) {
     const slider = document.getElementById('gf-slider');
     const input  = document.getElementById('gf-input');
     let metres;
@@ -262,6 +321,7 @@ function syncGeofenceInputs(source) {
         metres = parseFloat(input.value) * 1000;
         if (!isNaN(metres)) slider.value = Math.min(50000, Math.max(100, metres));
     }
+    if (gfCircle && !isNaN(metres)) gfCircle.setRadius(metres);
     const km = parseFloat(input.value);
     document.getElementById('gf-preview-val').textContent =
         isNaN(km) ? '—' : (km >= 1 ? km.toFixed(2) + ' km' : (km * 1000).toFixed(0) + ' m');
@@ -270,21 +330,14 @@ function syncGeofenceInputs(source) {
 function confirmGeofence() {
     const km = parseFloat(document.getElementById('gf-input').value);
     if (isNaN(km) || km <= 0) { alert('Please enter a valid radius.'); return; }
-    const radius = km * 1000;
     bootstrap.Modal.getInstance(document.getElementById('geofenceModal')).hide();
-    fetch('/api/locations?map=private')
-        .then(r => r.json())
-        .then(people => {
-            const child = people.find(p => p.name === gfChildName);
-            if (!child) { alert("Could not find child's location. Make sure they've opened their map recently."); return; }
-            return fetch('/api/set_geofence', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ child_id: gfChildId, lat: child.lat, lon: child.lon, radius })
-            });
-        })
-        .then(r => { if (r && r.ok) location.reload(); else if (r) alert('Failed to set zone.'); })
-        .catch(() => alert('Error setting zone.'));
+    fetch('/api/set_geofence', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ child_id: gfChildId, lat: gfLat, lon: gfLon, radius: km * 1000 })
+    })
+    .then(r => { if (r.ok) location.reload(); else alert('Failed to set zone.'); })
+    .catch(() => alert('Error setting zone.'));
 }
 </script>
 {% endif %}

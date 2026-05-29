@@ -233,7 +233,7 @@
             if (!res.ok) return;
             const data = await res.json();
 
-            // Draw circles for each child's geofence
+            // Draw circles for each child's geofence (green — parent view)
             geofenceLayer.clearLayers();
             data.geofences.forEach(f => {
                 L.circle([f.geofence_lat, f.geofence_lon], {
@@ -242,6 +242,16 @@
                     weight: 2, dashArray: '6,4'
                 }).bindTooltip(`Safe zone: ${f.child_name} (${(f.geofence_radius/1000).toFixed(2)} km)`,
                     { permanent: false }).addTo(geofenceLayer);
+            });
+            // Draw circles for my own safe zones (amber — child view)
+            (data.my_zones || []).forEach(z => {
+                L.circle([z.geofence_lat, z.geofence_lon], {
+                    radius: z.geofence_radius,
+                    color: '#f59e0b', fillColor: '#f59e0b', fillOpacity: 0.08,
+                    weight: 2.5, dashArray: '8,4'
+                }).bindTooltip(`Your safe zone set by ${z.parent_name} — stay inside!`,
+                    { permanent: true, direction: 'center', className: 'zone-label' })
+                  .addTo(geofenceLayer);
             });
 
             // Show alert banner
