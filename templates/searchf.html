@@ -85,6 +85,24 @@
                                         </form>
                                     {% endif %}
                                 {% endif %}
+                                {# Add as Child button – shown for all users not already your child #}
+                                {% if not user.is_my_child %}
+                                    {% if user.child_req_sent_status == 'pending' %}
+                                        <span class="btn btn-sm btn-outline-warning rounded-pill px-3 disabled">
+                                            <i class="bi bi-shield-lock me-1"></i>Child Req Sent
+                                        </span>
+                                    {% else %}
+                                        <form action="{{ url_for('send_child_request', to_id=user.id) }}" method="POST">
+                                            <button class="btn btn-sm btn-outline-warning rounded-pill px-3">
+                                                <i class="bi bi-shield-plus me-1"></i>Add as Child
+                                            </button>
+                                        </form>
+                                    {% endif %}
+                                {% else %}
+                                    <span class="btn btn-sm btn-warning rounded-pill px-3 disabled">
+                                        <i class="bi bi-shield-check me-1"></i>Child
+                                    </span>
+                                {% endif %}
                             </div>
                         </div>
                         {% endfor %}

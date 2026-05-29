@@ -1,5 +1,6 @@
 import sqlite3
 import time
+import math
 from functools import wraps
 from flask import Flask, render_template, jsonify, request, abort, session, redirect, url_for, flash
 from flask_session import Session
@@ -19,6 +20,15 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+def haversine(lat1, lon1, lat2, lon2):
+    """Returns distance in metres between two lat/lon points."""
+    R = 6371000
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lon2 - lon1)
+    a = math.sin(dp/2)**2 + math.cos(p1)*math.cos(p2)*math.sin(dl/2)**2
+    return 2 * R * math.asin(math.sqrt(a))
+
 def init_db():
     conn = get_db_connection()
     with open('schema.sql', mode='r') as f:
@@ -33,9 +43,13 @@ def inject_pending_requests():
             "SELECT COUNT(*) FROM friend_requests WHERE to_user_id = ? AND status = 'pending'",
             (session["user_id"],)
         ).fetchone()[0]
+        child_count = conn.execute(
+            "SELECT COUNT(*) FROM child_requests WHERE to_user_id = ? AND status = 'pending'",
+            (session["user_id"],)
+        ).fetchone()[0]
         conn.close()
-        return {"pending_requests_count": count}
-    return {"pending_requests_count": 0}
+        return {"pending_requests_count": count, "pending_child_requests_count": child_count}
+    return {"pending_requests_count": 0, "pending_child_requests_count": 0}
 
 def login_required(f):
     @wraps(f)
@@ -62,8 +76,24 @@ def home():
         WHERE fr.to_user_id = ? AND fr.status = 'pending'
         ORDER BY fr.created_at DESC
     """, (session["user_id"],)).fetchall()
+    # Child requests incoming (I am the would-be child)
+    incoming_child = conn.execute("""
+        SELECT cr.id, u.username
+        FROM child_requests cr
+        JOIN users u ON u.id = cr.from_user_id
+        WHERE cr.to_user_id = ? AND cr.status = 'pending'
+        ORDER BY cr.created_at DESC
+    """, (session["user_id"],)).fetchall()
+    # My children (users I am parent of)
+    my_children = conn.execute("""
+        SELECT u.id, u.username, pc.geofence_lat, pc.geofence_lon, pc.geofence_radius, pc.outside_geofence
+        FROM parent_child pc
+        JOIN users u ON u.id = pc.child_id
+        WHERE pc.parent_id = ?
+    """, (session["user_id"],)).fetchall()
     conn.close()
-    return render_template("home.html", map_follows=map_follows, incoming=incoming)
+    return render_template("home.html", map_follows=map_follows, incoming=incoming,
+                           incoming_child=incoming_child, my_children=my_children)
 
 @app.route("/searchf", methods=["GET", "POST"])
 @login_required
@@ -77,7 +107,9 @@ def search_friends():
                    CASE WHEN mf.followed_id IS NOT NULL THEN 1 ELSE 0 END AS on_map,
                    fr_sent.status AS sent_status,
                    fr_recv.id AS recv_id,
-                   fr_recv.status AS recv_status
+                   fr_recv.status AS recv_status,
+                   cr_sent.status AS child_req_sent_status,
+                   CASE WHEN pc.child_id IS NOT NULL THEN 1 ELSE 0 END AS is_my_child
             FROM users u
             LEFT JOIN map_follows mf
                    ON mf.user_id = ? AND mf.followed_id = u.id
@@ -85,8 +117,13 @@ def search_friends():
                    ON fr_sent.from_user_id = ? AND fr_sent.to_user_id = u.id
             LEFT JOIN friend_requests fr_recv
                    ON fr_recv.to_user_id = ? AND fr_recv.from_user_id = u.id
+            LEFT JOIN child_requests cr_sent
+                   ON cr_sent.from_user_id = ? AND cr_sent.to_user_id = u.id AND cr_sent.status = 'pending'
+            LEFT JOIN parent_child pc
+                   ON pc.parent_id = ? AND pc.child_id = u.id
             WHERE u.username LIKE ? AND u.id != ?
         """, (session["user_id"], session["user_id"], session["user_id"],
+              session["user_id"], session["user_id"],
               f"%{query}%", session["user_id"])).fetchall()
         conn.close()
     return render_template("searchf.html", users=users)
@@ -189,6 +226,133 @@ def decline_request(req_id):
     conn.close()
     flash("Request declined.")
     return redirect(url_for("home"))
+
+@app.route("/send_child_request/<int:to_id>", methods=["POST"])
+@login_required
+def send_child_request(to_id):
+    if to_id == session["user_id"]:
+        flash("You can't add yourself as a child.")
+        return redirect(url_for("search_friends"))
+    conn = get_db_connection()
+    try:
+        conn.execute(
+            "INSERT INTO child_requests (from_user_id, to_user_id, created_at) VALUES (?, ?, ?)",
+            (session["user_id"], to_id, int(time.time()))
+        )
+        conn.commit()
+        flash("Child request sent!")
+    except sqlite3.IntegrityError:
+        flash("You already sent a child request to this user.")
+    finally:
+        conn.close()
+    return redirect(url_for("search_friends"))
+
+@app.route("/accept_child_request/<int:req_id>", methods=["POST"])
+@login_required
+def accept_child_request(req_id):
+    conn = get_db_connection()
+    req = conn.execute(
+        "SELECT * FROM child_requests WHERE id = ? AND to_user_id = ? AND status = 'pending'",
+        (req_id, session["user_id"])
+    ).fetchone()
+    if not req:
+        conn.close()
+        flash("Request not found.")
+        return redirect(url_for("home"))
+    conn.execute("UPDATE child_requests SET status = 'accepted' WHERE id = ?", (req_id,))
+    try:
+        conn.execute(
+            "INSERT INTO parent_child (parent_id, child_id) VALUES (?, ?)",
+            (req["from_user_id"], session["user_id"])
+        )
+    except sqlite3.IntegrityError:
+        pass
+    conn.commit()
+    conn.close()
+    flash("You accepted the child request.")
+    return redirect(url_for("home"))
+
+@app.route("/decline_child_request/<int:req_id>", methods=["POST"])
+@login_required
+def decline_child_request(req_id):
+    conn = get_db_connection()
+    conn.execute(
+        "DELETE FROM child_requests WHERE id = ? AND to_user_id = ?",
+        (req_id, session["user_id"])
+    )
+    conn.commit()
+    conn.close()
+    flash("Child request declined.")
+    return redirect(url_for("home"))
+
+@app.route("/remove_child/<int:child_id>", methods=["POST"])
+@login_required
+def remove_child(child_id):
+    conn = get_db_connection()
+    conn.execute(
+        "DELETE FROM parent_child WHERE parent_id = ? AND child_id = ?",
+        (session["user_id"], child_id)
+    )
+    conn.commit()
+    conn.close()
+    flash("Child removed.")
+    return redirect(url_for("home"))
+
+@app.route("/api/set_geofence", methods=["POST"])
+@login_required
+def api_set_geofence():
+    data = request.get_json()
+    if not data:
+        abort(400, "JSON required")
+    try:
+        child_id = int(data["child_id"])
+        radius = float(data["radius"])
+        lat = float(data["lat"])
+        lon = float(data["lon"])
+    except (KeyError, ValueError):
+        abort(400, "child_id, lat, lon and radius are required")
+    conn = get_db_connection()
+    result = conn.execute(
+        "UPDATE parent_child SET geofence_lat=?, geofence_lon=?, geofence_radius=? WHERE parent_id=? AND child_id=?",
+        (lat, lon, radius, session["user_id"], child_id)
+    )
+    conn.commit()
+    conn.close()
+    if result.rowcount == 0:
+        abort(403, "Not your child.")
+    return jsonify({"status": "ok"})
+
+@app.route("/api/geofence_alerts", methods=["GET"])
+@login_required
+def api_geofence_alerts():
+    conn = get_db_connection()
+    # Alerts where I am the parent and the child is outside
+    parent_alerts = conn.execute("""
+        SELECT u.username AS child_name, pc.geofence_radius
+        FROM parent_child pc
+        JOIN users u ON u.id = pc.child_id
+        WHERE pc.parent_id = ? AND pc.outside_geofence = 1 AND pc.geofence_radius IS NOT NULL
+    """, (session["user_id"],)).fetchall()
+    # Alert if I am a child and I am outside my geofence
+    child_alerts = conn.execute("""
+        SELECT u.username AS parent_name, pc.geofence_radius
+        FROM parent_child pc
+        JOIN users u ON u.id = pc.parent_id
+        WHERE pc.child_id = ? AND pc.outside_geofence = 1 AND pc.geofence_radius IS NOT NULL
+    """, (session["user_id"],)).fetchall()
+    # Also return geofence circles for parent's private map
+    geofences = conn.execute("""
+        SELECT pc.child_id, u.username AS child_name, pc.geofence_lat, pc.geofence_lon, pc.geofence_radius
+        FROM parent_child pc
+        JOIN users u ON u.id = pc.child_id
+        WHERE pc.parent_id = ? AND pc.geofence_radius IS NOT NULL
+    """, (session["user_id"],)).fetchall()
+    conn.close()
+    return jsonify({
+        "parent_alerts": [dict(r) for r in parent_alerts],
+        "child_alerts": [dict(r) for r in child_alerts],
+        "geofences": [dict(r) for r in geofences]
+    })
 
 @app.route("/private-map")
 @login_required
@@ -469,6 +633,18 @@ def api_update_my_location():
         )
     # Keep users.location in sync
     conn.execute("UPDATE users SET location=? WHERE id=?", (location_str, session["user_id"]))
+    # Check geofences: are we outside any parent's radius?
+    fences = conn.execute(
+        "SELECT parent_id, geofence_lat, geofence_lon, geofence_radius FROM parent_child WHERE child_id = ? AND geofence_radius IS NOT NULL",
+        (session["user_id"],)
+    ).fetchall()
+    for fence in fences:
+        dist = haversine(lat, lon, fence["geofence_lat"], fence["geofence_lon"])
+        outside = 1 if dist > fence["geofence_radius"] else 0
+        conn.execute(
+            "UPDATE parent_child SET outside_geofence=? WHERE parent_id=? AND child_id=?",
+            (outside, fence["parent_id"], session["user_id"])
+        )
     conn.commit()
     conn.close()
     return jsonify({"status": "ok"})

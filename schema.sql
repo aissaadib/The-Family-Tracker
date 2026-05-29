@@ -42,6 +42,29 @@ CREATE TABLE IF NOT EXISTS map_follows (
     FOREIGN KEY(followed_id) REFERENCES users(id)
 );
 
+CREATE TABLE IF NOT EXISTS child_requests (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_user_id INTEGER NOT NULL,
+    to_user_id INTEGER NOT NULL,
+    status TEXT DEFAULT 'pending',
+    created_at INTEGER NOT NULL,
+    FOREIGN KEY(from_user_id) REFERENCES users(id),
+    FOREIGN KEY(to_user_id) REFERENCES users(id),
+    UNIQUE(from_user_id, to_user_id)
+);
+
+CREATE TABLE IF NOT EXISTS parent_child (
+    parent_id INTEGER NOT NULL,
+    child_id INTEGER NOT NULL,
+    geofence_lat REAL,
+    geofence_lon REAL,
+    geofence_radius REAL,
+    outside_geofence INTEGER DEFAULT 0,
+    PRIMARY KEY (parent_id, child_id),
+    FOREIGN KEY(parent_id) REFERENCES users(id),
+    FOREIGN KEY(child_id) REFERENCES users(id)
+);
+
 CREATE TABLE IF NOT EXISTS map_notes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id INTEGER NOT NULL,

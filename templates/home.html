@@ -41,6 +41,46 @@
 </div>
 {% endif %}
 
+{% if incoming_child %}
+<div class="row mt-3">
+  <div class="col-12">
+    <div class="card border-0 shadow-sm p-3" style="border-left: 4px solid #f59e0b !important;">
+      <div class="card-body p-0">
+        <h5 class="fw-bold mb-3 text-warning"><i class="bi bi-shield-lock-fill me-2"></i>Child Tracking Requests
+          <span class="badge bg-warning text-dark ms-2">{{ incoming_child|length }}</span>
+        </h5>
+        <p class="text-muted small mb-3">These users want to track your location and set safe-zone limits.</p>
+        <div class="list-group list-group-flush">
+          {% for req in incoming_child %}
+          <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2 border-0">
+            <div class="d-flex align-items-center">
+              <div class="bg-warning bg-opacity-10 text-warning rounded-circle p-1 me-2">
+                <i class="bi bi-person-fill"></i>
+              </div>
+              <span class="fw-medium">{{ req.username }}</span>
+              <span class="ms-2 text-muted small">wants to track you</span>
+            </div>
+            <div class="d-flex gap-2">
+              <form action="{{ url_for('accept_child_request', req_id=req.id) }}" method="POST">
+                <button class="btn btn-sm btn-warning rounded-pill px-3">
+                  <i class="bi bi-check2 me-1"></i>Accept
+                </button>
+              </form>
+              <form action="{{ url_for('decline_child_request', req_id=req.id) }}" method="POST">
+                <button class="btn btn-sm btn-outline-danger rounded-pill px-3">
+                  <i class="bi bi-x-lg me-1"></i>Decline
+                </button>
+              </form>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 <div class="row mt-4">
     <div class="col-md-4 mb-4">
         <div class="card h-100 border-0 p-3 shadow-sm">
@@ -108,4 +148,79 @@
         </div>
     </div>
 </div>
+
+{% if my_children %}
+<div class="row mt-2">
+  <div class="col-12">
+    <div class="card border-0 shadow-sm p-3" style="border-left: 4px solid #10b981 !important;">
+      <div class="card-body p-0">
+        <h5 class="fw-bold mb-3 text-success"><i class="bi bi-shield-check me-2"></i>My Children
+          <span class="badge bg-success ms-2">{{ my_children|length }}</span>
+        </h5>
+        <div class="list-group list-group-flush">
+          {% for child in my_children %}
+          <div class="list-group-item px-0 py-3 border-0">
+            <div class="d-flex justify-content-between align-items-start">
+              <div class="d-flex align-items-center">
+                <div class="bg-success bg-opacity-10 text-success rounded-circle p-1 me-2">
+                  <i class="bi bi-person-fill"></i>
+                </div>
+                <div>
+                  <span class="fw-medium">{{ child.username }}</span>
+                  {% if child.outside_geofence and child.geofence_radius %}
+                  <span class="badge bg-danger ms-2"><i class="bi bi-exclamation-triangle-fill me-1"></i>Outside safe zone!</span>
+                  {% elif child.geofence_radius %}
+                  <span class="badge bg-success bg-opacity-10 text-success ms-2"><i class="bi bi-check-circle me-1"></i>In safe zone</span>
+                  {% else %}
+                  <span class="badge bg-secondary bg-opacity-10 text-secondary ms-2">No zone set</span>
+                  {% endif %}
+                </div>
+              </div>
+              <form action="{{ url_for('remove_child', child_id=child.id) }}" method="POST">
+                <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-2"
+                        onclick="return confirm('Remove {{ child.username }} as child?')">
+                  <i class="bi bi-x-lg"></i>
+                </button>
+              </form>
+            </div>
+            <!-- Geofence setter -->
+            <div class="mt-2 ps-4">
+              {% if child.geofence_radius %}
+              <small class="text-muted">Safe zone: {{ (child.geofence_radius / 1000) | round(2) }} km radius around their last known position</small><br>
+              {% endif %}
+              <button class="btn btn-sm btn-outline-success rounded-pill mt-1"
+                      onclick="setGeofence({{ child.id }}, '{{ child.username }}')">
+                <i class="bi bi-geo-alt me-1"></i>{{ 'Update' if child.geofence_radius else 'Set' }} Safe Zone
+              </button>
+            </div>
+          </div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function setGeofence(childId, childName) {
+    const radiusKm = prompt(`Set safe zone radius for ${childName} (in km):\n(The zone will be centred on their current location)`, "1");
+    if (!radiusKm || isNaN(parseFloat(radiusKm))) return;
+    const radius = parseFloat(radiusKm) * 1000;
+    // Get the child's current location from the API then set the fence
+    fetch('/api/locations?map=private')
+        .then(r => r.json())
+        .then(people => {
+            const child = people.find(p => p.name === childName);
+            if (!child) { alert("Could not find child's location. Make sure they've opened their map recently."); return; }
+            return fetch('/api/set_geofence', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ child_id: childId, lat: child.lat, lon: child.lon, radius })
+            });
+        })
+        .then(r => { if (r && r.ok) location.reload(); else if (r) alert('Failed to set zone.'); })
+        .catch(() => alert('Error setting zone.'));
+}
+</script>
+{% endif %}
 {% endblock %}

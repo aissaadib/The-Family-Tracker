@@ -92,9 +92,10 @@
                         <li class="nav-item me-2">
                             <a href="/" class="btn btn-light btn-sm position-relative rounded-pill px-3 shadow-sm">
                                 <i class="bi bi-people-fill me-1"></i>Requests
-                                {% if pending_requests_count > 0 %}
+                                {% set total_pending = pending_requests_count + pending_child_requests_count %}
+                                {% if total_pending > 0 %}
                                 <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger border border-light" style="font-size:.6rem;padding:.25em .4em;">
-                                    {{ pending_requests_count }}
+                                    {{ total_pending }}
                                 </span>
                                 {% endif %}
                             </a>

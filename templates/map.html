@@ -72,6 +72,10 @@
       </div>
     </div>
 
+    {% if map_type == "private" and session.get("user_id") %}
+    <div id="geofence-alert-banner" style="display:none;background:#fee2e2;border:1.5px solid #ef4444;border-radius:10px;padding:10px 16px;margin-bottom:10px;color:#991b1b;font-weight:600;font-size:14px;"></div>
+    {% endif %}
+
     <div id="map-wrapper">
       <div id="map"></div>
 
@@ -217,6 +221,46 @@
 
     loadNotes();
     setInterval(loadNotes, 10000);
+
+    // ── Geofence circles + alerts (private map, logged-in) ─────────────────
+    {% if map_type == "private" and session.get("user_id") %}
+    let geofenceLayer = L.layerGroup().addTo(map);
+    const alertBanner = document.getElementById('geofence-alert-banner');
+
+    async function checkGeofenceAlerts() {
+        try {
+            const res = await fetch('/api/geofence_alerts');
+            if (!res.ok) return;
+            const data = await res.json();
+
+            // Draw circles for each child's geofence
+            geofenceLayer.clearLayers();
+            data.geofences.forEach(f => {
+                L.circle([f.geofence_lat, f.geofence_lon], {
+                    radius: f.geofence_radius,
+                    color: '#10b981', fillColor: '#10b981', fillOpacity: 0.08,
+                    weight: 2, dashArray: '6,4'
+                }).bindTooltip(`Safe zone: ${f.child_name} (${(f.geofence_radius/1000).toFixed(2)} km)`,
+                    { permanent: false }).addTo(geofenceLayer);
+            });
+
+            // Show alert banner
+            const allAlerts = [
+                ...data.parent_alerts.map(a => `⚠️ <b>${a.child_name}</b> has left their safe zone!`),
+                ...data.child_alerts.map(a => `⚠️ You have left your safe zone set by <b>${a.parent_name}</b>!`)
+            ];
+            if (allAlerts.length > 0) {
+                alertBanner.innerHTML = allAlerts.join('<br>');
+                alertBanner.style.display = 'block';
+            } else {
+                alertBanner.style.display = 'none';
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    checkGeofenceAlerts();
+    setInterval(checkGeofenceAlerts, 10000);
+    {% endif %}
 
     // ── Click to add note ──────────────────────────────────────────────────
     if (CAN_ADD_NOTE) {
