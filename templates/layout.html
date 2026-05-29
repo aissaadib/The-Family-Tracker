@@ -64,6 +64,46 @@
             border-radius: 12px;
             border: none;
         }
+        /* Geofence breach banner */
+        #gf-breach-banner {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; right: 0;
+            z-index: 2000;
+            background: linear-gradient(90deg, #dc2626, #b91c1c);
+            color: #fff;
+            padding: 0.55rem 1rem;
+            font-size: 0.875rem;
+            font-weight: 600;
+            text-align: center;
+            box-shadow: 0 2px 8px rgba(220,38,38,0.4);
+            animation: gf-pulse 2s ease-in-out infinite;
+        }
+        @keyframes gf-pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.82; }
+        }
+        /* push content down when banner is visible */
+        body.gf-breach-active { padding-top: 42px; }
+        /* notification bell dropdown */
+        .notif-bell { position: relative; }
+        #notif-badge {
+            display: none;
+            position: absolute;
+            top: -4px; right: -4px;
+            background: #dc2626;
+            color: #fff;
+            border-radius: 999px;
+            font-size: .6rem;
+            font-weight: 700;
+            padding: .15em .4em;
+            border: 2px solid #fff;
+            line-height: 1;
+        }
+        .notif-dropdown {
+            min-width: 300px;
+            font-size: .875rem;
+        }
     </style>
     {% block head %}{% endblock %}
 </head>
@@ -100,6 +140,18 @@
                                 {% endif %}
                             </a>
                         </li>
+                        <!-- NOTIFICATION BELL -->
+                        <li class="nav-item me-2 dropdown">
+                            <button class="btn btn-light btn-sm rounded-pill px-3 shadow-sm notif-bell dropdown-toggle"
+                                    id="notifBell" data-bs-toggle="dropdown" aria-expanded="false" style="position:relative;">
+                                <i class="bi bi-bell-fill"></i>
+                                <span id="notif-badge"></span>
+                            </button>
+                            <ul class="dropdown-menu dropdown-menu-end notif-dropdown shadow border-0 rounded-3 p-2" id="notif-list"
+                                aria-labelledby="notifBell">
+                                <li><span class="dropdown-item-text text-muted small" id="notif-empty">No alerts right now</span></li>
+                            </ul>
+                        </li>
                         <li class="nav-item px-2">
                             <span class="navbar-text fw-medium text-dark me-3">
                                 Hi, {{ session["username"] }}
@@ -114,6 +166,12 @@
             </div>
         </div>
     </nav>
+    <!-- Persistent geofence breach banner (shown on all pages) -->
+    <div id="gf-breach-banner">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        <span id="gf-breach-text"></span>
+    </div>
+
     <div class="container mt-3">
         {% with messages = get_flashed_messages() %}
             {% if messages %}
@@ -125,5 +183,67 @@
         {% block main %}{% endblock %}
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    {% if session.get("user_id") %}
+    <script>
+    (function pollGeofenceAlerts() {
+        async function check() {
+            try {
+                const res = await fetch('/api/geofence_alerts');
+                if (!res.ok) return;
+                const data = await res.json();
+
+                const alerts = [
+                    ...data.parent_alerts.map(a => `${a.child_name} has left their safe zone!`),
+                    ...data.child_alerts.map(a => `You have left your safe zone set by ${a.parent_name}!`)
+                ];
+
+                const banner  = document.getElementById('gf-breach-banner');
+                const badge   = document.getElementById('notif-badge');
+                const list    = document.getElementById('notif-list');
+                const empty   = document.getElementById('notif-empty');
+
+                if (alerts.length > 0) {
+                    // Breach banner
+                    document.getElementById('gf-breach-text').textContent = alerts.join('  ·  ');
+                    banner.style.display = 'block';
+                    document.body.classList.add('gf-breach-active');
+
+                    // Bell badge
+                    badge.textContent = alerts.length;
+                    badge.style.display = 'inline';
+
+                    // Bell dropdown items
+                    if (empty) empty.parentElement.remove();
+                    // clear old alert items then re-add
+                    list.querySelectorAll('.gf-alert-item').forEach(el => el.remove());
+                    alerts.forEach(msg => {
+                        const li = document.createElement('li');
+                        li.className = 'gf-alert-item';
+                        li.innerHTML = `<span class="dropdown-item-text d-flex align-items-start gap-2 py-1">
+                            <span class="text-danger mt-1" style="flex-shrink:0;"><i class="bi bi-exclamation-circle-fill"></i></span>
+                            <span style="white-space:normal;">${msg}</span>
+                        </span>`;
+                        list.appendChild(li);
+                    });
+                } else {
+                    // No breaches
+                    banner.style.display = 'none';
+                    document.body.classList.remove('gf-breach-active');
+                    badge.style.display = 'none';
+                    list.querySelectorAll('.gf-alert-item').forEach(el => el.remove());
+                    if (!list.querySelector('#notif-empty')) {
+                        const li = document.createElement('li');
+                        li.innerHTML = `<span class="dropdown-item-text text-muted small" id="notif-empty">No alerts right now</span>`;
+                        list.appendChild(li);
+                    }
+                }
+            } catch(e) {}
+        }
+        check();
+        setInterval(check, 8000);
+    })();
+    </script>
+    {% endif %}
 </body>
 </html>
