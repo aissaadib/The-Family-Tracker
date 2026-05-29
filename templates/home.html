@@ -2,23 +2,29 @@
 
 {% block main %}
 
-{% if incoming %}
+{% if incoming or incoming_child %}
 <div class="row mt-4">
   <div class="col-12">
     <div class="card border-0 shadow-sm p-3" style="border-left: 4px solid #4f46e5 !important;">
       <div class="card-body p-0">
-        <h5 class="fw-bold mb-3 text-primary"><i class="bi bi-people-fill me-2"></i>Friend Requests
-          <span class="badge bg-danger ms-2">{{ incoming|length }}</span>
+        <h5 class="fw-bold mb-3 text-primary">
+          <i class="bi bi-bell-fill me-2"></i>Incoming Requests
+          <span class="badge bg-danger ms-2">{{ (incoming|length) + (incoming_child|length) }}</span>
         </h5>
         <div class="list-group list-group-flush">
+
           {% for req in incoming %}
           <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2 border-0">
             <div class="d-flex align-items-center">
-              <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-1 me-2">
-                <i class="bi bi-person-fill"></i>
+              <div class="bg-primary bg-opacity-10 text-primary rounded-circle p-2 me-2">
+                <i class="bi bi-person-plus-fill"></i>
               </div>
-              <span class="fw-medium">{{ req.username }}</span>
-              <span class="ms-2 text-muted small">wants to connect</span>
+              <div>
+                <span class="fw-medium">{{ req.username }}</span>
+                <span class="ms-2 badge bg-primary bg-opacity-10 text-primary border border-primary border-opacity-25 small">
+                  <i class="bi bi-people me-1"></i>Friend Request
+                </span>
+              </div>
             </div>
             <div class="d-flex gap-2">
               <form action="{{ url_for('accept_request', req_id=req.id) }}" method="POST">
@@ -34,35 +40,23 @@
             </div>
           </div>
           {% endfor %}
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-{% endif %}
 
-{% if incoming_child %}
-<div class="row mt-3">
-  <div class="col-12">
-    <div class="card border-0 shadow-sm p-3" style="border-left: 4px solid #f59e0b !important;">
-      <div class="card-body p-0">
-        <h5 class="fw-bold mb-3 text-warning"><i class="bi bi-shield-lock-fill me-2"></i>Child Tracking Requests
-          <span class="badge bg-warning text-dark ms-2">{{ incoming_child|length }}</span>
-        </h5>
-        <p class="text-muted small mb-3">These users want to track your location and set safe-zone limits.</p>
-        <div class="list-group list-group-flush">
           {% for req in incoming_child %}
           <div class="list-group-item d-flex justify-content-between align-items-center px-0 py-2 border-0">
             <div class="d-flex align-items-center">
-              <div class="bg-warning bg-opacity-10 text-warning rounded-circle p-1 me-2">
-                <i class="bi bi-person-fill"></i>
+              <div class="bg-warning bg-opacity-10 text-warning rounded-circle p-2 me-2">
+                <i class="bi bi-shield-lock-fill"></i>
               </div>
-              <span class="fw-medium">{{ req.username }}</span>
-              <span class="ms-2 text-muted small">wants to track you</span>
+              <div>
+                <span class="fw-medium">{{ req.username }}</span>
+                <span class="ms-2 badge bg-warning bg-opacity-10 text-warning border border-warning border-opacity-25 small">
+                  <i class="bi bi-shield me-1"></i>Child Tracking
+                </span>
+              </div>
             </div>
             <div class="d-flex gap-2">
               <form action="{{ url_for('accept_child_request', req_id=req.id) }}" method="POST">
-                <button class="btn btn-sm btn-warning rounded-pill px-3">
+                <button class="btn btn-sm btn-success rounded-pill px-3">
                   <i class="bi bi-check2 me-1"></i>Accept
                 </button>
               </form>
@@ -74,6 +68,7 @@
             </div>
           </div>
           {% endfor %}
+
         </div>
       </div>
     </div>
