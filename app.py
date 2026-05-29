@@ -531,13 +531,27 @@ def api_locations():
             }]
         rows = family_rows
     else:
-        # Non-logged in users (or Public Map) only see people from p_map
-        # We join people with p_map on name=username
-        rows = conn.execute("""
-            SELECT p.name, p.role, p.lat, p.lon, p.last_update 
-            FROM people p
-            JOIN p_map pm ON p.name = pm.username
-        """).fetchall()
+        if is_logged_in:
+            # Logged-in user on public map: all vis=1 people PLUS their map_follows (even if private)
+            rows = conn.execute("""
+                SELECT p.name, p.role, p.lat, p.lon, p.last_update
+                FROM people p
+                WHERE p.name IN (
+                    SELECT pm.username FROM p_map pm
+                    UNION
+                    SELECT u.username
+                    FROM users u
+                    JOIN map_follows mf ON u.id = mf.followed_id
+                    WHERE mf.user_id = ?
+                )
+            """, (session["user_id"],)).fetchall()
+        else:
+            # Non-logged-in: only public (vis=1) people
+            rows = conn.execute("""
+                SELECT p.name, p.role, p.lat, p.lon, p.last_update 
+                FROM people p
+                JOIN p_map pm ON p.name = pm.username
+            """).fetchall()
         
     conn.close()
 

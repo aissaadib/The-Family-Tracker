@@ -196,21 +196,91 @@
   </div>
 </div>
 
+<!-- Geofence Modal -->
+<div class="modal fade" id="geofenceModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content border-0 shadow-lg rounded-4">
+      <div class="modal-header border-0 pb-0">
+        <h5 class="modal-title fw-bold"><i class="bi bi-geo-alt-fill text-success me-2"></i>Set Safe Zone</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pt-2">
+        <p class="text-muted small mb-3">The safe zone will be centred on <strong id="gf-child-name"></strong>'s current location.</p>
+
+        <label class="form-label fw-medium">Radius</label>
+        <div class="d-flex align-items-center gap-3 mb-2">
+          <input type="range" class="form-range flex-grow-1" id="gf-slider"
+                 min="100" max="50000" step="100" value="1000"
+                 oninput="syncGeofenceInputs('slider')">
+          <div class="input-group" style="width:130px;">
+            <input type="number" class="form-control form-control-sm text-center" id="gf-input"
+                   min="0.1" step="0.1" value="1"
+                   oninput="syncGeofenceInputs('text')">
+            <span class="input-group-text bg-light small">km</span>
+          </div>
+        </div>
+        <div class="d-flex justify-content-between text-muted" style="font-size:11px;">
+          <span>100 m</span><span>5 km</span><span>50 km</span>
+        </div>
+
+        <div class="alert alert-success mt-3 py-2 small rounded-3" id="gf-preview">
+          Safe zone: <strong id="gf-preview-val">1.00 km</strong> radius
+        </div>
+      </div>
+      <div class="modal-footer border-0 pt-0">
+        <button class="btn btn-outline-secondary rounded-pill px-4" data-bs-dismiss="modal">Cancel</button>
+        <button class="btn btn-success rounded-pill px-4 fw-bold" onclick="confirmGeofence()">
+          <i class="bi bi-check2-circle me-1"></i>Set Safe Zone
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
+let gfChildId = null;
+let gfChildName = null;
+
 function setGeofence(childId, childName) {
-    const radiusKm = prompt(`Set safe zone radius for ${childName} (in km):\n(The zone will be centred on their current location)`, "1");
-    if (!radiusKm || isNaN(parseFloat(radiusKm))) return;
-    const radius = parseFloat(radiusKm) * 1000;
-    // Get the child's current location from the API then set the fence
+    gfChildId = childId;
+    gfChildName = childName;
+    document.getElementById('gf-child-name').textContent = childName;
+    document.getElementById('gf-slider').value = 1000;
+    document.getElementById('gf-input').value = '1';
+    document.getElementById('gf-preview-val').textContent = '1.00 km';
+    new bootstrap.Modal(document.getElementById('geofenceModal')).show();
+}
+
+function syncGeofenceInputs(source) {
+    const slider = document.getElementById('gf-slider');
+    const input  = document.getElementById('gf-input');
+    let metres;
+    if (source === 'slider') {
+        metres = parseFloat(slider.value);
+        input.value = (metres / 1000).toFixed(metres < 1000 ? 3 : 2);
+    } else {
+        metres = parseFloat(input.value) * 1000;
+        if (!isNaN(metres)) slider.value = Math.min(50000, Math.max(100, metres));
+    }
+    const km = parseFloat(input.value);
+    document.getElementById('gf-preview-val').textContent =
+        isNaN(km) ? '—' : (km >= 1 ? km.toFixed(2) + ' km' : (km * 1000).toFixed(0) + ' m');
+}
+
+function confirmGeofence() {
+    const km = parseFloat(document.getElementById('gf-input').value);
+    if (isNaN(km) || km <= 0) { alert('Please enter a valid radius.'); return; }
+    const radius = km * 1000;
+    bootstrap.Modal.getInstance(document.getElementById('geofenceModal')).hide();
     fetch('/api/locations?map=private')
         .then(r => r.json())
         .then(people => {
-            const child = people.find(p => p.name === childName);
+            const child = people.find(p => p.name === gfChildName);
             if (!child) { alert("Could not find child's location. Make sure they've opened their map recently."); return; }
             return fetch('/api/set_geofence', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ child_id: childId, lat: child.lat, lon: child.lon, radius })
+                body: JSON.stringify({ child_id: gfChildId, lat: child.lat, lon: child.lon, radius })
             });
         })
         .then(r => { if (r && r.ok) location.reload(); else if (r) alert('Failed to set zone.'); })
