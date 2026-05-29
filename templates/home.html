@@ -209,7 +209,12 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body pt-2">
-        <p class="text-muted small mb-2"><i class="bi bi-cursor me-1"></i>Click anywhere on the map to move the zone centre. Drag the map to navigate.</p>
+        <div class="d-flex align-items-center justify-content-between mb-2">
+          <p class="text-muted small mb-0"><i class="bi bi-cursor me-1"></i>Click anywhere on the map to move the zone centre. Drag the map to pan.</p>
+          <button class="btn btn-outline-primary btn-sm rounded-pill px-3" onclick="snapToChildLocation()" type="button">
+            <i class="bi bi-crosshair me-1"></i>Snap to location
+          </button>
+        </div>
 
         <!-- Mini map -->
         <div id="gf-map" style="height:280px;border-radius:12px;border:1px solid #e2e8f0;margin-bottom:14px;"></div>
@@ -308,6 +313,17 @@ async function initGfMap() {
 function updateGfCoords(lat, lon) {
     document.getElementById('gf-coords').textContent =
         `${lat.toFixed(5)}, ${lon.toFixed(5)}`;
+}
+
+async function snapToChildLocation() {
+    const people = await fetch('/api/locations?map=private').then(r => r.json()).catch(() => []);
+    const child  = people.find(p => p.name === gfChildName);
+    if (!child) { alert("Child's location not found yet. Ask them to open their map first."); return; }
+    gfLat = child.lat; gfLon = child.lon;
+    gfMarker.setLatLng([gfLat, gfLon]);
+    gfCircle.setLatLng([gfLat, gfLon]);
+    gfMap.setView([gfLat, gfLon], 14);
+    updateGfCoords(gfLat, gfLon);
 }
 
 function syncGfInputs(source) {

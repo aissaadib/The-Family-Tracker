@@ -316,10 +316,26 @@ def api_set_geofence():
         "UPDATE parent_child SET geofence_lat=?, geofence_lon=?, geofence_radius=? WHERE parent_id=? AND child_id=?",
         (lat, lon, radius, session["user_id"], child_id)
     )
+    if result.rowcount == 0:
+        conn.close()
+        abort(403, "Not your child.")
+    # Immediately check whether the child is already outside the new zone
+    child_loc = conn.execute(
+        "SELECT location FROM users WHERE id=?", (child_id,)
+    ).fetchone()
+    if child_loc and child_loc["location"]:
+        try:
+            clat, clon = map(float, child_loc["location"].split(","))
+            dist = haversine(clat, clon, lat, lon)
+            outside = 1 if dist > radius else 0
+            conn.execute(
+                "UPDATE parent_child SET outside_geofence=? WHERE parent_id=? AND child_id=?",
+                (outside, session["user_id"], child_id)
+            )
+        except (ValueError, AttributeError):
+            pass
     conn.commit()
     conn.close()
-    if result.rowcount == 0:
-        abort(403, "Not your child.")
     return jsonify({"status": "ok"})
 
 @app.route("/api/geofence_alerts", methods=["GET"])
