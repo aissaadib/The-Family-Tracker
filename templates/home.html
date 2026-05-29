@@ -171,12 +171,10 @@
                   {% endif %}
                 </div>
               </div>
-              <form action="{{ url_for('remove_child', child_id=child.id) }}" method="POST">
-                <button type="submit" class="btn btn-sm btn-outline-danger rounded-pill px-2"
-                        onclick="return confirm('Remove {{ child.username }} as child?')">
-                  <i class="bi bi-x-lg"></i>
-                </button>
-              </form>
+              <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3"
+                      onclick="confirmRemoveChild({{ child.id }}, '{{ child.username }}')">
+                <i class="bi bi-person-dash-fill me-1"></i>Remove
+              </button>
             </div>
             <!-- Geofence setter -->
             <div class="mt-2 ps-4">
@@ -195,6 +193,42 @@
     </div>
   </div>
 </div>
+
+<!-- Remove Child Confirmation Modal -->
+<div class="modal fade" id="removeChildModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content border-0 shadow-lg rounded-4">
+      <div class="modal-body text-center px-4 pt-4 pb-3">
+        <div class="mb-3">
+          <span class="d-inline-flex align-items-center justify-content-center rounded-circle bg-danger bg-opacity-10" style="width:56px;height:56px;">
+            <i class="bi bi-person-dash-fill text-danger fs-4"></i>
+          </span>
+        </div>
+        <h6 class="fw-bold mb-1">Remove child?</h6>
+        <p class="text-muted small mb-3">
+          You're about to remove <strong id="rc-child-name"></strong> from your children list. Their safe zone will also be deleted.
+        </p>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-secondary rounded-pill flex-fill" data-bs-dismiss="modal">Cancel</button>
+          <button class="btn btn-danger rounded-pill flex-fill fw-semibold" id="rc-confirm-btn">
+            <i class="bi bi-person-dash-fill me-1"></i>Remove
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+<form id="rc-form" method="POST" style="display:none;"></form>
+
+<script>
+function confirmRemoveChild(childId, childName) {
+    document.getElementById('rc-child-name').textContent = childName;
+    const form = document.getElementById('rc-form');
+    form.action = '/remove_child/' + childId;
+    document.getElementById('rc-confirm-btn').onclick = () => form.submit();
+    new bootstrap.Modal(document.getElementById('removeChildModal')).show();
+}
+</script>
 
 <!-- Leaflet for geofence modal -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
